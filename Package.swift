@@ -13,7 +13,7 @@ let package = Package(
         // Products define the executables and libraries a package produces, making them visible to other packages.
         .library(
             name: "NIBStarter",
-            targets: ["NIBStarter"]
+            targets: ["NIBStarter", "NIBStarterObjC"]
         ),
     ],
     targets: [
@@ -21,13 +21,16 @@ let package = Package(
         // Targets can depend on other targets in this package and products from dependencies.
         .target(
             name: "NIBStarter",
-            swiftSettings: [
-                .enableUpcomingFeature("ApproachableConcurrency"),
-            ],
+            dependencies: []
+        ),
+        .target(
+            name: "NIBStarterObjC",
+            dependencies: [],
+            publicHeadersPath: "include"
         ),
         .testTarget(
             name: "NIBStarterTests",
-            dependencies: ["NIBStarter"]
+            dependencies: ["NIBStarter", "NIBStarterObjC"]
         ),
 
     ]
