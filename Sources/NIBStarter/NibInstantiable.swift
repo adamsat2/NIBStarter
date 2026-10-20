@@ -17,6 +17,7 @@ public typealias PlatformViewController = NSViewController
 
 /// A protocol enabling any UIViewController or NSViewController
 /// to instantiate itself from a matching XIB/NIB file without hardcoded strings.
+@MainActor
 public protocol NibInstantiable: AnyObject {
     /// The filename of the NIB without the `.xib` or `.nib` extension.
     static var nibName: String { get }
