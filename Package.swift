@@ -19,6 +19,10 @@ let package = Package(
             name: "nib-validator",
             targets: ["NIBValidator"]
         ),
+        .plugin(
+            name: "NIBValidatorPlugin",
+            targets: ["NIBValidatorPlugin"]
+        ),
     ],
     dependencies: [
         .package(url: "https://github.com/swiftlang/swift-syntax.git", from: "600.0.0")
@@ -46,6 +50,13 @@ let package = Package(
             name: "NIBValidator",
             dependencies: [
                 "NIBValidatorCore"
+            ]
+        ),
+        .plugin(
+            name: "NIBValidatorPlugin",
+            capability: .buildTool(),
+            dependencies: [
+                .target(name: "NIBValidator")
             ]
         ),
         .testTarget(
