@@ -15,6 +15,13 @@ let package = Package(
             name: "NIBStarter",
             targets: ["NIBStarter", "NIBStarterObjC"]
         ),
+        .executable(
+            name: "nib-validator",
+            targets: ["NIBValidator"]
+        ),
+    ],
+    dependencies: [
+        .package(url: "https://github.com/swiftlang/swift-syntax.git", from: "600.0.0")
     ],
     targets: [
         // Targets are the basic building blocks of a package, defining a module or a test suite.
@@ -28,9 +35,22 @@ let package = Package(
             dependencies: [],
             publicHeadersPath: "include"
         ),
+        .target(
+            name: "NIBValidatorCore",
+            dependencies: [
+                .product(name: "SwiftSyntax", package: "swift-syntax"),
+                .product(name: "SwiftParser", package: "swift-syntax"),
+            ]
+        ),
+        .executableTarget(
+            name: "NIBValidator",
+            dependencies: [
+                "NIBValidatorCore"
+            ]
+        ),
         .testTarget(
             name: "NIBStarterTests",
-            dependencies: ["NIBStarter", "NIBStarterObjC"]
+            dependencies: ["NIBStarter", "NIBStarterObjC", "NIBValidatorCore"]
         ),
 
     ]
