@@ -5,7 +5,7 @@
 //  Created by Adam Stern on 20/10/2026.
 //
 
-#import "include/NSViewController+NIBStarter.h"
+#import "include/NIBStarterObjC/NSViewController+NIBStarter.h"
 
 #if __has_include(<AppKit/AppKit.h>)
 

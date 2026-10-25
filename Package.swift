@@ -16,6 +16,10 @@ let package = Package(
             name: "NIBStarter",
             targets: ["NIBStarter", "NIBStarterObjC"]
         ),
+        .library(
+            name: "NIBStarterObjC",
+            targets: ["NIBStarterObjC"]
+        ),
         // component 2: validator CLI & plugin
         .executable(
             name: "nib-validator",
@@ -64,32 +68,33 @@ let package = Package(
         .executableTarget(
             name: "NIBValidator",
             dependencies: [
-                "NIBValidatorCore"
+                "NIBValidatorCore",
+                .product(name: "ArgumentParser", package: "swift-argument-parser")
             ]
         ),
         .plugin(
             name: "NIBValidatorPlugin",
             capability: .buildTool(),
-            dependencies: [
-                .target(name: "NIBValidator")
-            ]
+            dependencies: ["NIBValidator"]
         ),
         
-        // MARK: - component 3: Scaffolding CLI
+        // MARK: - component 3: CLI
         .executableTarget(
             name: "NIBStarterCLI",
             dependencies: [
                 .product(name: "ArgumentParser", package: "swift-argument-parser"),
-                .product(name: "XcodeProj", package: "XcodeProj"),
+                .product(name: "XcodeProj", package: "XcodeProj")
             ]
         ),
         
-        
-        // MARK: - tests
+        // MARK: - Tests
         .testTarget(
             name: "NIBStarterTests",
-            dependencies: ["NIBStarter", "NIBStarterObjC", "NIBValidatorCore"]
+            dependencies: [
+                "NIBStarter",
+                "NIBStarterObjC",
+                "NIBValidatorCore"
+            ]
         ),
-
     ]
 )
