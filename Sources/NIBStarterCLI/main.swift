@@ -7,7 +7,6 @@
 
 import Foundation
 import ArgumentParser
-import XcodeProj
 
 struct NIBStarterCLI: ParsableCommand {
     static let configuration = CommandConfiguration(
@@ -15,8 +14,9 @@ struct NIBStarterCLI: ParsableCommand {
         abstract: "A CLI tool to automate Storyboard stripping, programmatic setup, and Xcode template installation.",
         version: "1.0.0",
         subcommands: [
-            // TODO: hook up Convert.self and InstallTemplates.self here
-        ]
+            ConvertCommand.self,
+        ],
+        defaultSubcommand: ConvertCommand.self
     )
 }
 
