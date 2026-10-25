@@ -22,8 +22,8 @@ struct ConvertCommand: ParsableCommand {
     @Option(name: .long, help: "Platform for the project (ios or macos). Defaults to auto-detecting from project settings.")
     var platform: ProjectPlatform?
     
-    @Option(name: .shortAndLong, help: "Language to use for scaffolding (swift or objc). Defaults to auto-detecting from project files.")
-    var language: ProjectLanguage?
+    @Option(name: .shortAndLong, help: "Language to use for scaffolding (swift or objc).")
+    var language: ProjectLanguage = .swift
     
     @Flag(inversion: .prefixedNo, help: "Generate starter RootViewController and bootstrapping files.")
     var scaffold: Bool = true
@@ -45,10 +45,9 @@ struct ConvertCommand: ParsableCommand {
         
         print("[NIBStarter] Converting project: \(projectURL.lastPathComponent)")
         
-        // Detect platform and language if not passed explicitly
+        // Detect platform if not passed explicitly
         let resolvedPlatform = platform ?? detectPlatform(at: projectURL)
-        let resolvedLanguage = language ?? detectLanguage(at: projectURL)
-        print("  Platform: \(resolvedPlatform.rawValue.uppercased()) | Language: \(resolvedLanguage.rawValue)")
+        print("  Platform: \(resolvedPlatform.rawValue.uppercased()) | Language: \(language.rawValue)")
         
         // Strip Storyboards
         let stripper = StoryboardStripper(projectURL: projectURL)
@@ -68,14 +67,14 @@ struct ConvertCommand: ParsableCommand {
                 in: finalDir,
                 appName: appName,
                 platform: resolvedPlatform,
-                language: resolvedLanguage
+                language: language
             )
             
-            if resolvedLanguage == .objc && resolvedPlatform == .macos {
+            if language == .objc && resolvedPlatform == .macos {
                 try Self.trackMainMIfNeeded(projectURL: projectURL, targetDir: finalDir, appName: appName)
             }
             
-            print("  ✓ Generated \(resolvedPlatform.rawValue.uppercased()) \(resolvedLanguage == .swift ? "Swift" : "Objective-C") RootViewController & matching .xib")
+            print("  ✓ Generated \(resolvedPlatform.rawValue.uppercased()) \(language == .swift ? "Swift" : "Objective-C") RootViewController & matching .xib")
             print("  ✓ Configured bootstrapping entry point")
         }
         
@@ -133,19 +132,5 @@ struct ConvertCommand: ParsableCommand {
             return .ios
         }
         return sdk.lowercased().contains("macos") ? .macos : .ios
-    }
-    
-    private func detectLanguage(at url: URL) -> ProjectLanguage {
-        let appDirectory = url.deletingLastPathComponent()
-        let fileManager = FileManager.default
-        if let enumerator = fileManager.enumerator(at: appDirectory, includingPropertiesForKeys: [.isRegularFileKey], options: [.skipsHiddenFiles]) {
-            for case let fileURL as URL in enumerator {
-                let ext = fileURL.pathExtension.lowercased()
-                if ext == "m" || ext == "mm" {
-                    return .objc
-                }
-            }
-        }
-        return .swift
     }
 }

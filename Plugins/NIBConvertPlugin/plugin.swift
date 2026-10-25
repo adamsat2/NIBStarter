@@ -16,8 +16,18 @@ struct NIBConvertPlugin: CommandPlugin {
         let process = Process()
         process.executableURL = tool.url
         process.arguments = ["convert"] + arguments
+        
+        let outputPipe = Pipe()
+        process.standardOutput = outputPipe
+        process.standardError = outputPipe
+        
         try process.run()
         process.waitUntilExit()
+        
+        let data = outputPipe.fileHandleForReading.readDataToEndOfFile()
+        if let output = String(data: data, encoding: .utf8), !output.isEmpty {
+            print(output)
+        }
         
         guard process.terminationStatus == 0 else {
             throw NIBConvertPluginError.executionFailed(exitCode: process.terminationStatus)
@@ -42,8 +52,18 @@ extension NIBConvertPlugin: XcodeCommandPlugin {
         let process = Process()
         process.executableURL = tool.url
         process.arguments = ["convert", "--project", xcodeProj] + arguments
+        
+        let outputPipe = Pipe()
+        process.standardOutput = outputPipe
+        process.standardError = outputPipe
+        
         try process.run()
         process.waitUntilExit()
+        
+        let data = outputPipe.fileHandleForReading.readDataToEndOfFile()
+        if let output = String(data: data, encoding: .utf8), !output.isEmpty {
+            print(output)
+        }
         
         guard process.terminationStatus == 0 else {
             throw NIBConvertPluginError.executionFailed(exitCode: process.terminationStatus)

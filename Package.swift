@@ -38,6 +38,10 @@ let package = Package(
             name: "NIBConvertPlugin",
             targets: ["NIBConvertPlugin"]
         ),
+        .plugin(
+            name: "NIBInstallTemplatesPlugin",
+            targets: ["NIBInstallTemplatesPlugin"]
+        ),
     ],
     dependencies: [
         // AST parsing for component 2
@@ -82,7 +86,7 @@ let package = Package(
             dependencies: ["NIBValidator"]
         ),
         
-        // MARK: - component 3: CLI & Command Plugin
+        // MARK: - component 3: CLI & Command Plugins
         .executableTarget(
             name: "NIBStarterCLI",
             dependencies: [
@@ -100,6 +104,16 @@ let package = Package(
                 permissions: [
                     .writeToPackageDirectory(reason: "Strip Storyboards and scaffold NIB starter files")
                 ]
+            ),
+            dependencies: ["NIBStarterCLI"]
+        ),
+        .plugin(
+            name: "NIBInstallTemplatesPlugin",
+            capability: .command(
+                intent: .custom(
+                    verb: "nibstarter-install-templates",
+                    description: "Install NIBStarter file templates into Xcode"
+                )
             ),
             dependencies: ["NIBStarterCLI"]
         ),
