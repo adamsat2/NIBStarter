@@ -22,25 +22,23 @@ public struct StoryboardStripper {
         let xcodeProj = try XcodeProj(path: path)
         let pbxproj = xcodeProj.pbxproj
         
-        var filesToDeleteFromDisk: [String] = []
+        // Target storyboard names across iOS (Main) and macOS (MainMenu, Main)
+        let storyboardNames: Set<String> = ["Main.storyboard", "MainMenu.storyboard"]
         
-        // Identify File References and Variant Groups named "Main.storyboard"
-        let fileRefs = pbxproj.fileReferences.filter { $0.name == "Main.storyboard" || $0.path == "Main.storyboard" }
-        let variantGroups = pbxproj.variantGroups.filter { $0.name == "Main.storyboard" }
-        
-        let allTargetUUIDs = Set(fileRefs.map(\.uuid) + variantGroups.map(\.uuid))
-        
-        // Collect disk paths before removing references
-        for ref in fileRefs {
-            if let p = ref.path { filesToDeleteFromDisk.append(p) }
-        }
-        for vg in variantGroups {
-            for child in vg.children {
-                if let p = child.path { filesToDeleteFromDisk.append(p) }
-            }
+        let fileRefs = pbxproj.fileReferences.filter { ref in
+            guard let name = ref.name ?? ref.path else { return false }
+            return storyboardNames.contains(name)
         }
         
-        // Remove from PBXResourcesBuildPhase across all native targets
+        let variantGroups = pbxproj.variantGroups.filter { vg in
+            guard let name = vg.name ?? vg.path else { return false }
+            return storyboardNames.contains(name)
+        }
+        
+        let targetUUIDs = fileRefs.map { $0.uuid }
+        let groupUUIDs = variantGroups.map { $0.uuid }
+        let allTargetUUIDs = Set(targetUUIDs).union(groupUUIDs)
+        
         for target in pbxproj.nativeTargets {
             if let resourcesPhase = try target.resourcesBuildPhase() {
                 let buildFilesToRemove = resourcesPhase.files?.filter { buildFile in
@@ -54,15 +52,15 @@ public struct StoryboardStripper {
                 }
             }
             
-            // Remove modern Build Settings storyboard keys (Xcode 13+)
+            // Strip both iOS and macOS build setting storyboard keys
             if let configList = target.buildConfigurationList {
                 for config in configList.buildConfigurations {
                     config.buildSettings.removeValue(forKey: "INFOPLIST_KEY_UIMainStoryboardFile")
+                    config.buildSettings.removeValue(forKey: "INFOPLIST_KEY_NSMainStoryboardFile")
                 }
             }
         }
         
-        // Remove from PBXGroups and delete objects from project
         for group in pbxproj.groups {
             group.children.removeAll { allTargetUUIDs.contains($0.uuid) }
         }
@@ -76,14 +74,10 @@ public struct StoryboardStripper {
             pbxproj.delete(object: vg)
         }
         
-        // Write back updated PBXProj
         try xcodeProj.write(path: path)
         
-        // Clean Physical Info.plist files on disk
         cleanPhysicalInfoPlists(in: projectURL.deletingLastPathComponent())
-        
-        // Delete physical Main.storyboard files on disk
-        deleteFilesFromDisk(in: projectURL.deletingLastPathComponent())
+        deleteFilesFromDisk(in: projectURL.deletingLastPathComponent(), names: storyboardNames)
     }
     
     private func cleanPhysicalInfoPlists(in rootURL: URL) {
@@ -96,12 +90,11 @@ public struct StoryboardStripper {
             
             var modified = false
             
-            // Remove UIMainStoryboardFile
-            if plistDict.removeValue(forKey: "UIMainStoryboardFile") != nil {
-                modified = true
-            }
+            // Remove iOS and macOS storyboard keys
+            if plistDict.removeValue(forKey: "UIMainStoryboardFile") != nil { modified = true }
+            if plistDict.removeValue(forKey: "NSMainStoryboardFile") != nil { modified = true }
             
-            // Clean UIApplicationSceneManifest -> UISceneConfigurations -> UIWindowSceneSessionRoleApplication
+            // Clean Scene Configurations (iOS)
             if var sceneManifest = plistDict["UIApplicationSceneManifest"] as? [String: Any],
                var sceneConfigs = sceneManifest["UISceneConfigurations"] as? [String: Any],
                var appConfigs = sceneConfigs["UIWindowSceneSessionRoleApplication"] as? [[String: Any]] {
@@ -123,17 +116,16 @@ public struct StoryboardStripper {
         }
     }
     
-    private func deleteFilesFromDisk(in rootURL: URL) {
+    private func deleteFilesFromDisk(in rootURL: URL, names: Set<String>) {
         let fileManager = FileManager.default
         guard let enumerator = fileManager.enumerator(at: rootURL, includingPropertiesForKeys: nil) else { return }
         
         var toDelete: [URL] = []
         for case let url as URL in enumerator {
-            if url.lastPathComponent == "Main.storyboard" {
+            if names.contains(url.lastPathComponent) {
                 toDelete.append(url)
             }
         }
-        
         for url in toDelete {
             try? fileManager.removeItem(at: url)
         }

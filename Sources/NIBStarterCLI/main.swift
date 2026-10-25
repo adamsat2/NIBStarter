@@ -15,6 +15,7 @@ struct NIBStarterCLI: ParsableCommand {
         version: "1.0.0",
         subcommands: [
             ConvertCommand.self,
+            InstallTemplatesCommand.self
         ],
         defaultSubcommand: ConvertCommand.self
     )
