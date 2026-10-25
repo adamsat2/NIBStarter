@@ -55,22 +55,29 @@ Add the product to your target:
 
 The conversion tool strips Storyboard references from your project, cleans Storyboard keys from Info.plist and target build settings, deletes physical .storyboard files from disk, and scaffolds a starter RootViewController and .xib with programmatic bootstrapping.
 
-### Method 1: Terminal Command (Direct Invocation)
+### Method 1: Directly in Xcode (No Terminal Needed)
 
-You do not need to install anything globally. You can invoke the tool directly from terminal using `swift run --package-path`:
+Once you have added the NIBStarter package dependency to your Xcode project:
+
+1. In Xcode's Project Navigator (left sidebar), **right-click your project icon** at the top.
+2. Select **NIBConvertPlugin** (or **Convert Storyboards to NIBStarter**).
+3. In the target selection sheet, click **Run**.
+4. When Xcode prompts for permission to modify files, click **Allow**.
+
+### Method 2: Terminal Command (Using Xcode's Downloaded Package Cache)
+
+When you add NIBStarter to an Xcode project via SPM, Xcode downloads the package into your project's `DerivedData/.../SourcePackages/checkouts/NIBStarter` directory. Because a normal `.xcodeproj` does not have a `Package.swift` in its own folder, running `swift run` directly will fail unless you pass `--package-path` pointing to that checkout (or a local clone):
 
 ```bash
-# Inside your Xcode project directory (Swift project):
-swift run --package-path /path/to/NIBStarter nibstarter convert
+# Run from inside your Xcode project directory using Xcode's DerivedData checkout:
+NIB_PATH=$(find ~/Library/Developer/Xcode/DerivedData -type d -path "*/SourcePackages/checkouts/NIBStarter" | head -n 1)
+swift run --package-path "$NIB_PATH" nibstarter convert
 
-# Inside an Objective-C project directory:
-swift run --package-path /path/to/NIBStarter nibstarter convert --language objc
-
-# From any directory, specifying the .xcodeproj location:
-swift run --package-path /path/to/NIBStarter nibstarter convert --project /path/to/MyApp/MyApp.xcodeproj --platform ios --language objc
+# For an Objective-C project:
+swift run --package-path "$NIB_PATH" nibstarter convert --language objc
 
 # Strip storyboards without generating starter files:
-swift run --package-path /path/to/NIBStarter nibstarter convert --no-scaffold
+swift run --package-path "$NIB_PATH" nibstarter convert --no-scaffold
 ```
 
 Available options:
@@ -79,15 +86,7 @@ Available options:
 - `--language <swift|objc>`: Language to scaffold (defaults to swift).
 - `--no-scaffold`: Only strips Storyboards without creating starter files.
 
-### Method 2: Xcode In-IDE Action
-
-If you added NIBStarter as a package dependency in Xcode:
-
-1. Right-click your project root in Xcode's Project Navigator (or open **Product > Perform Action**).
-2. Select **Convert Storyboards to NIBStarter**.
-3. In the confirmation dialog, click **Run** to allow the plugin to modify project files.
-
-### Method 3: Swift Package Manager CLI (For SPM Projects)
+### Method 3: Swift Package Manager CLI (For Projects with a Package.swift)
 
 If your app is built as a Swift Package:
 
@@ -101,17 +100,18 @@ swift package --allow-writing-to-package-directory nibstarter-convert
 
 NIBStarter includes Xcode file templates for quick creation of view controllers with matching .xib files.
 
-### Option 1: Terminal
+### Option 1: Directly in Xcode
 
-Run the installer via terminal:
+1. Right-click your project icon in Xcode's Project Navigator.
+2. Select **NIBInstallTemplatesPlugin** (or **Install NIBStarter File Templates**).
+3. Click **Run** and **Allow**.
+
+### Option 2: Terminal
 
 ```bash
-swift run --package-path /path/to/NIBStarter nibstarter install-templates
+NIB_PATH=$(find ~/Library/Developer/Xcode/DerivedData -type d -path "*/SourcePackages/checkouts/NIBStarter" | head -n 1)
+swift run --package-path "$NIB_PATH" nibstarter install-templates
 ```
-
-### Option 2: Xcode In-IDE Action
-
-In Xcode, right-click your project root and select **Product > Perform Action > Install NIBStarter File Templates**.
 
 After installing, restart Xcode. When you open **File > New > File...**, four templates will appear under the **NIBStarter** section:
 - **NibInstantiable UIViewController (Swift)**
@@ -327,7 +327,8 @@ When you rename or delete an `@IBOutlet` or `@IBAction` in code without removing
 You can also run the validator directly in CI pipelines or terminal:
 
 ```bash
-swift run --package-path /path/to/NIBStarter nib-validator --path /path/to/YourProject --strict
+NIB_PATH=$(find ~/Library/Developer/Xcode/DerivedData -type d -path "*/SourcePackages/checkouts/NIBStarter" | head -n 1)
+swift run --package-path "$NIB_PATH" nib-validator --path /path/to/YourProject --strict
 ```
 
 ---
