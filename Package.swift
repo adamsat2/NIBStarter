@@ -11,10 +11,12 @@ let package = Package(
     ],
     products: [
         // Products define the executables and libraries a package produces, making them visible to other packages.
+        // component 1: runtime libraries
         .library(
             name: "NIBStarter",
             targets: ["NIBStarter", "NIBStarterObjC"]
         ),
+        // component 2: validator CLI & plugin
         .executable(
             name: "nib-validator",
             targets: ["NIBValidator"]
@@ -23,13 +25,24 @@ let package = Package(
             name: "NIBValidatorPlugin",
             targets: ["NIBValidatorPlugin"]
         ),
+        // component 3: scaffolding CLI
+        .executable(
+            name: "nibstarter",
+            targets: ["NIBStarterCLI"]
+        ),
     ],
     dependencies: [
-        .package(url: "https://github.com/swiftlang/swift-syntax.git", from: "600.0.0")
+        // AST parsing for component 2
+        .package(url: "https://github.com/swiftlang/swift-syntax.git", from: "600.0.0"),
+        // CLI Command parser for component 3
+        .package(url: "https://github.com/apple/swift-argument-parser.git", from: "1.3.0"),
+        // Xcode project manipulation for component 3
+        .package(url: "https://github.com/tuist/XcodeProj.git", from: "8.16.0"),
     ],
     targets: [
         // Targets are the basic building blocks of a package, defining a module or a test suite.
         // Targets can depend on other targets in this package and products from dependencies.
+        // MARK: - component 1: Runtime
         .target(
             name: "NIBStarter",
             dependencies: []
@@ -39,6 +52,8 @@ let package = Package(
             dependencies: [],
             publicHeadersPath: "include"
         ),
+        
+        // MARK: - component 2: Validator
         .target(
             name: "NIBValidatorCore",
             dependencies: [
@@ -59,6 +74,18 @@ let package = Package(
                 .target(name: "NIBValidator")
             ]
         ),
+        
+        // MARK: - component 3: Scaffolding CLI
+        .executableTarget(
+            name: "NIBStarterCLI",
+            dependencies: [
+                .product(name: "ArgumentParser", package: "swift-argument-parser"),
+                .product(name: "XcodeProj", package: "XcodeProj"),
+            ]
+        ),
+        
+        
+        // MARK: - tests
         .testTarget(
             name: "NIBStarterTests",
             dependencies: ["NIBStarter", "NIBStarterObjC", "NIBValidatorCore"]
