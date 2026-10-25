@@ -29,10 +29,14 @@ let package = Package(
             name: "NIBValidatorPlugin",
             targets: ["NIBValidatorPlugin"]
         ),
-        // component 3: scaffolding CLI
+        // component 3: scaffolding CLI & command plugin
         .executable(
             name: "nibstarter",
             targets: ["NIBStarterCLI"]
+        ),
+        .plugin(
+            name: "NIBConvertPlugin",
+            targets: ["NIBConvertPlugin"]
         ),
     ],
     dependencies: [
@@ -78,13 +82,26 @@ let package = Package(
             dependencies: ["NIBValidator"]
         ),
         
-        // MARK: - component 3: CLI
+        // MARK: - component 3: CLI & Command Plugin
         .executableTarget(
             name: "NIBStarterCLI",
             dependencies: [
                 .product(name: "ArgumentParser", package: "swift-argument-parser"),
                 .product(name: "XcodeProj", package: "XcodeProj")
             ]
+        ),
+        .plugin(
+            name: "NIBConvertPlugin",
+            capability: .command(
+                intent: .custom(
+                    verb: "nibstarter-convert",
+                    description: "Convert Storyboards to NIBStarter and set up programmatic bootstrapping"
+                ),
+                permissions: [
+                    .writeToPackageDirectory(reason: "Strip Storyboards and scaffold NIB starter files")
+                ]
+            ),
+            dependencies: ["NIBStarterCLI"]
         ),
         
         // MARK: - Tests

@@ -7,7 +7,7 @@ A lightweight, modern SDK for iOS and macOS that eliminates Storyboard overhead 
 - **Type-Safe NIB Instantiation**: Instantiate `UIViewController` and `NSViewController` instances from matching `.xib` files using protocol-oriented Swift extensions and Objective-C categories without hardcoded string identifiers.
 - **Pure Programmatic Bootstrapping**: Clean window/scene configuration helpers for UIKit (`SceneDelegate`, `AppDelegate`) and AppKit (`AppDelegate`), removing the need for Storyboard entry points.
 - **Build-Time XIB Validation (`NIBValidatorPlugin`)**: An automated Swift Package Manager build-tool plugin that parses your `.xib` Interface Builder files and Swift/Objective-C source files to detect missing or broken `@IBOutlet` and `@IBAction` connections at compile time.
-- **Project Migration CLI (`nibstarter convert`)**: Automatically strips Storyboard files and references from existing `.xcodeproj` projects, adjusts `Info.plist` settings, and generates clean starter view controllers and `.xib` layouts.
+- **Xcode Command Plugin & CLI (`NIBConvertPlugin`)**: Convert existing Xcode projects to NIBStarter directly inside Xcode via **Product > Perform Action**, automatically stripping Storyboards, updating build settings and Info.plist, and scaffolding programmatic entry points.
 - **Xcode File Templates (`nibstarter install-templates`)**: Installs native Xcode templates for creating `NibInstantiable` view controllers and associated `.xib` files with connections pre-wired.
 
 ## Requirements
@@ -44,10 +44,38 @@ Add the library to your target:
 ### 2. In an Xcode Project (`.xcodeproj`)
 
 1. Open **File > Add Package Dependencies...** and enter `https://github.com/adamsat2/NIBStarter.git`.
-2. Add the **NIBStarter** library product to your app target.
+2. Add the **NIBStarter** (or **NIBStarterObjC**) library product to your app target.
 3. To enable build-time XIB validation:
    - Select your project in the Project Navigator, select your app target, and open the **Build Phases** tab.
    - Expand **Run Build Tool Plug-ins** and click **+** to add **NIBValidatorPlugin**.
+
+## Converting an Existing Project to NIBStarter
+
+You do not need to install any global CLI tools or binaries. Because NIBStarter includes an **Xcode Command Plugin**, you can convert your project directly from inside Xcode or via the Swift Package Manager.
+
+### Option A: Directly Inside Xcode (Recommended for Xcode Projects)
+
+Once you have added the NIBStarter package dependency to your `.xcodeproj`:
+
+1. In Xcode, right-click your project in the Project Navigator (or go to the top menu and select **Product > Perform Action**).
+2. Click **Convert Storyboards to NIBStarter**.
+3. Xcode will prompt you with a dialog asking to run the plugin and allow write permissions to your project folder.
+4. Click **Run**.
+
+The plugin will:
+- Strip `Main.storyboard` and `MainMenu.storyboard` references and build phases from your `.xcodeproj`.
+- Remove `INFOPLIST_KEY_UIMainStoryboardFile` and `INFOPLIST_KEY_NSMainStoryboardFile` build settings.
+- Clean `UIMainStoryboardFile`, `NSMainStoryboardFile`, and `UISceneStoryboardFile` from `Info.plist`.
+- Delete physical `.storyboard` files from disk.
+- Generate a starter `RootViewController` and `RootViewController.xib`, and configure your `SceneDelegate` or `AppDelegate`.
+
+### Option B: From the Terminal in Swift Packages
+
+If your project is a Swift Package, run the command plugin from your package directory:
+
+```bash
+swift package --allow-writing-to-package-directory nibstarter-convert
+```
 
 ## Runtime Usage
 
@@ -241,29 +269,7 @@ You can also run the standalone validator CLI directly in CI or pre-commit hooks
 swift run nib-validator --path /path/to/YourProject --strict
 ```
 
-## CLI Tool (`nibstarter`)
-
-### 1. Strip Storyboards and Scaffold an Existing Xcode Project
-
-Run `nibstarter convert` inside your project directory to:
-- Remove `Main.storyboard` and `MainMenu.storyboard` references and build phase entries from `.xcodeproj`
-- Remove `INFOPLIST_KEY_UIMainStoryboardFile` and `INFOPLIST_KEY_NSMainStoryboardFile` build settings
-- Strip `UIMainStoryboardFile`, `NSMainStoryboardFile`, and `UISceneStoryboardFile` from `Info.plist`
-- Delete physical `.storyboard` files from disk
-- Generate a starter `RootViewController` and `RootViewController.xib`, and configure `SceneDelegate` or `AppDelegate`
-
-```bash
-# Auto-detect .xcodeproj and platform in the current directory (defaults to Swift):
-swift run nibstarter convert
-
-# Specify project path, platform (ios | macos), and language (swift | objc):
-swift run nibstarter convert --project MyApp.xcodeproj --platform ios --language objc
-
-# Strip Storyboards without generating starter files:
-swift run nibstarter convert --no-scaffold
-```
-
-### 2. Install Xcode File Templates
+## Xcode File Templates
 
 Install the NIBStarter template group into `~/Library/Developer/Xcode/Templates`:
 
