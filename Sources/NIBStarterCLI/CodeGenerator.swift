@@ -61,9 +61,9 @@ public struct CodeGenerator {
                     <rect key="frame" x="0.0" y="0.0" width="393" height="852"/>
                     <autoresizingMask key="autoresizingMask" widthSizable="YES" heightSizable="YES"/>
                     <subviews>
-                        <label opaque="NO" userInteractionEnabled="NO" contentMode="left" horizontalHuggingPriority="251" verticalHuggingPriority="251" text="Welcome to NIBStarter" textAlignment="center" lineBreakMode="tailTruncation" baselineAdjustment="alignBaselines" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="abc-123">
-                            <rect key="frame" x="20" y="413" width="353" height="26.333333333333314"/>
-                            <fontDescription key="fontDescription" type="boldSystem" pointSize="22"/>
+                        <label opaque="NO" userInteractionEnabled="NO" contentMode="left" horizontalHuggingPriority="251" verticalHuggingPriority="251" text="Welcome to NIBStarter" textAlignment="center" lineBreakMode="tailTruncation" baselineAdjustment="alignBaselines" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="lbl-1">
+                            <rect key="frame" x="20" y="414" width="353" height="24"/>
+                            <fontDescription key="fontDescription" type="boldSystem" pointSize="20"/>
                             <nil key="textColor"/>
                             <nil key="highlightedColor"/>
                         </label>
@@ -71,17 +71,12 @@ public struct CodeGenerator {
                     <viewLayoutGuide key="safeArea" id="fnl-2z-Ty3"/>
                     <color key="backgroundColor" systemColor="systemBackgroundColor"/>
                     <constraints>
-                        <constraint firstItem="abc-123" firstAttribute="centerY" secondItem="i5M-Pr-FkT" secondAttribute="centerY" id="c-1"/>
-                        <constraint firstItem="abc-123" firstAttribute="leading" secondItem="fnl-2z-Ty3" secondAttribute="leading" constant="20" id="c-2"/>
-                        <constraint firstItem="fnl-2z-Ty3" firstAttribute="trailing" secondItem="abc-123" secondAttribute="trailing" constant="20" id="c-3"/>
+                        <constraint firstItem="lbl-1" firstAttribute="leading" secondItem="fnl-2z-Ty3" secondAttribute="leading" constant="20" id="c1-leading"/>
+                        <constraint firstItem="fnl-2z-Ty3" firstAttribute="trailing" secondItem="lbl-1" secondAttribute="trailing" constant="20" id="c1-trailing"/>
+                        <constraint firstItem="lbl-1" firstAttribute="centerY" secondItem="i5M-Pr-FkT" secondAttribute="centerY" id="c1-centerY"/>
                     </constraints>
                 </view>
             </objects>
-            <resources>
-                <systemColor name="systemBackgroundColor">
-                    <color white="1" alpha="1" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
-                </systemColor>
-            </resources>
         </document>
         """
         try xib.write(to: targetDir.appendingPathComponent("RootViewController.xib"), atomically: true, encoding: .utf8)
@@ -95,11 +90,10 @@ public struct CodeGenerator {
             final class RootViewController: UIViewController, NibInstantiable {
                 override func viewDidLoad() {
                     super.viewDidLoad()
-                    view.backgroundColor = .systemBackground
                 }
             }
             """
-            let scene = """
+            let sceneDelegate = """
             import UIKit
             import NIBStarter
 
@@ -107,13 +101,16 @@ public struct CodeGenerator {
                 var window: UIWindow?
 
                 func scene(_ scene: UIScene, willConnectTo session: UISceneSession, options connectionOptions: UIScene.ConnectionOptions) {
-                    guard let windowScene = (scene as? UIWindowScene) else { return }
-                    NibStarter.bootstrap(scene: windowScene, window: &window, root: RootViewController.instantiateFromNib())
+                    NibStarter.bootstrap(
+                        scene: scene,
+                        window: &window,
+                        root: RootViewController.instantiateFromNib()
+                    )
                 }
             }
             """
             try vc.write(to: targetDir.appendingPathComponent("RootViewController.swift"), atomically: true, encoding: .utf8)
-            try scene.write(to: targetDir.appendingPathComponent("SceneDelegate.swift"), atomically: true, encoding: .utf8)
+            try sceneDelegate.write(to: targetDir.appendingPathComponent("SceneDelegate.swift"), atomically: true, encoding: .utf8)
             
         case .objc:
             let h = """
@@ -134,19 +131,14 @@ public struct CodeGenerator {
 
             - (void)viewDidLoad {
                 [super viewDidLoad];
-                self.view.backgroundColor = [UIColor systemBackgroundColor];
             }
 
             @end
             """
             let sceneM = """
-            #import <UIKit/UIKit.h>
+            #import "SceneDelegate.h"
             #import "RootViewController.h"
             #import <NIBStarterObjC/NIBStarterObjC.h>
-
-            @interface SceneDelegate : UIResponder <UIWindowSceneDelegate>
-            @property (strong, nonatomic) UIWindow *window;
-            @end
 
             @implementation SceneDelegate
 
@@ -262,12 +254,27 @@ public struct CodeGenerator {
 
             @end
             """
+            let appDelegateHURL = targetDir.appendingPathComponent("AppDelegate.h")
+            if !FileManager.default.fileExists(atPath: appDelegateHURL.path) {
+                let appDelegateH = """
+                #import <Cocoa/Cocoa.h>
+
+                NS_ASSUME_NONNULL_BEGIN
+
+                @interface AppDelegate : NSObject <NSApplicationDelegate>
+                @end
+
+                NS_ASSUME_NONNULL_END
+                """
+                try appDelegateH.write(to: appDelegateHURL, atomically: true, encoding: .utf8)
+            }
             let appDelegateM = """
             #import <AppKit/AppKit.h>
+            #import "AppDelegate.h"
             #import "RootViewController.h"
             #import <NIBStarterObjC/NIBStarterObjC.h>
 
-            @interface AppDelegate : NSObject <NSApplicationDelegate>
+            @interface AppDelegate ()
             @property (strong, nonatomic) NSWindowController *windowController;
             @end
 
@@ -283,9 +290,24 @@ public struct CodeGenerator {
 
             @end
             """
+            let mainM = """
+            #import <Cocoa/Cocoa.h>
+            #import "AppDelegate.h"
+
+            int main(int argc, const char * argv[]) {
+                @autoreleasepool {
+                    NSApplication *app = [NSApplication sharedApplication];
+                    AppDelegate *delegate = [[AppDelegate alloc] init];
+                    app.delegate = delegate;
+                    [app run];
+                }
+                return 0;
+            }
+            """
             try h.write(to: targetDir.appendingPathComponent("RootViewController.h"), atomically: true, encoding: .utf8)
             try m.write(to: targetDir.appendingPathComponent("RootViewController.m"), atomically: true, encoding: .utf8)
             try appDelegateM.write(to: targetDir.appendingPathComponent("AppDelegate.m"), atomically: true, encoding: .utf8)
+            try mainM.write(to: targetDir.appendingPathComponent("main.m"), atomically: true, encoding: .utf8)
         }
     }
 }

@@ -70,11 +70,58 @@ struct ConvertCommand: ParsableCommand {
                 language: language
             )
             
+            if language == .objc && resolvedPlatform == .macos {
+                try Self.trackMainMIfNeeded(projectURL: projectURL, targetDir: finalDir, appName: appName)
+            }
+            
             print("  ✓ Generated \(resolvedPlatform.rawValue.uppercased()) \(language == .swift ? "Swift" : "Objective-C") RootViewController & matching .xib")
             print("  ✓ Configured bootstrapping entry point")
         }
         
         print("\n[NIBStarter] Conversion complete! Open your project and press Cmd + R.")
+    }
+    
+    static func trackMainMIfNeeded(projectURL: URL, targetDir: URL, appName: String) throws {
+        let projectPath = Path(projectURL.path)
+        let xcodeProj = try XcodeProj(path: projectPath)
+        let pbxproj = xcodeProj.pbxproj
+        let sourceRoot = Path(projectURL.deletingLastPathComponent().path)
+        let mainMURL = targetDir.appendingPathComponent("main.m")
+        let mainMPath = Path(mainMURL.path)
+        
+        guard mainMPath.exists else { return }
+        
+        let target = pbxproj.nativeTargets.first { $0.name == appName } ?? pbxproj.nativeTargets.first
+        
+        let hasSynchronizedGroup = target?.fileSystemSynchronizedGroups?.contains(where: { syncGroup in
+            syncGroup.path == appName || syncGroup.path == targetDir.lastPathComponent
+        }) ?? false
+        
+        if hasSynchronizedGroup {
+            return
+        }
+        
+        let existingRef = pbxproj.fileReferences.first { ref in
+            (ref.name ?? ref.path) == "main.m"
+        }
+        
+        let fileRef: PBXFileReference
+        if let existing = existingRef {
+            fileRef = existing
+        } else {
+            let targetGroup = pbxproj.groups.first { group in
+                group.name == appName || group.path == appName
+            } ?? (try? pbxproj.rootGroup())
+            
+            guard let group = targetGroup else { return }
+            fileRef = try group.addFile(at: mainMPath, sourceRoot: sourceRoot)
+        }
+        
+        if let target = target, let sourcesPhase = try target.sourcesBuildPhase() {
+            _ = try sourcesPhase.add(file: fileRef)
+        }
+        
+        try xcodeProj.write(path: projectPath)
     }
     
     private func detectPlatform(at url: URL) -> ProjectPlatform {

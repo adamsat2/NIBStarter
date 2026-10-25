@@ -93,7 +93,8 @@ let package = Package(
             dependencies: [
                 "NIBStarter",
                 "NIBStarterObjC",
-                "NIBValidatorCore"
+                "NIBValidatorCore",
+                "NIBStarterCLI"
             ]
         ),
     ]

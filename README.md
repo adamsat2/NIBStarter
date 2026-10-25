@@ -1,51 +1,44 @@
 # NIBStarter
 
-NIBStarter is a multiplatform Swift Package Manager (SPM) SDK and developer toolchain for iOS (UIKit) and macOS (AppKit) in both Swift and Objective-C. It replaces Storyboards with modular XIB workflows, catches broken `@IBOutlet` and `@IBAction` connections at build time before they cause runtime crashes, and provides CLI scaffolding and Xcode file templates.
+A lightweight, modern SDK for iOS and macOS that eliminates Storyboard overhead in favor of pure XIB (NIB) architectures with type-safe instantiation, build-time interface validation, and project migration tooling.
 
-## Features
+## Key Features
 
-1. **Type-Safe Runtime Instantiation (`NIBStarter` and `NIBStarterObjC`)**
-   - No hardcoded NIB strings. Automatically resolves the NIB name and bundle from your controller class.
-   - `@MainActor`-isolated `NibInstantiable` protocol for Swift (`UIViewController` and `NSViewController`).
-   - Objective-C categories (`+nib_instantiate`) on `UIViewController` and `NSViewController`.
-   - Single-line window bootstrapping helpers for `UISceneDelegate`, legacy `UIApplicationDelegate`, and `NSApplicationDelegate`.
-2. **Build-Time XIB Validator (`NIBValidatorPlugin` and `nib-validator`)**
-   - Cross-references `.xib` files against Swift (via `SwiftSyntax` AST) and Objective-C (`.h` and `.m`) source files during compilation.
-   - Emits inline Xcode compiler errors with exact line numbers for orphaned outlets, broken action selectors, and missing `view` connections.
-3. **Project Converter and Xcode Templates CLI (`nibstarter`)**
-   - `nibstarter convert`: Strips `Main.storyboard` and `MainMenu.storyboard` from `.xcodeproj`, cleans `Info.plist` and build settings, deletes storyboard files from disk, and scaffolds a starter `RootViewController.xib` and app entry point.
-   - `nibstarter install-templates`: Installs four custom Xcode file templates (`File > New > File...`) for `UIViewController` and `NSViewController` in Swift and Objective-C.
+- **Type-Safe NIB Instantiation**: Instantiate `UIViewController` and `NSViewController` instances from matching `.xib` files using protocol-oriented Swift extensions and Objective-C categories without hardcoded string identifiers.
+- **Pure Programmatic Bootstrapping**: Clean window/scene configuration helpers for UIKit (`SceneDelegate`, `AppDelegate`) and AppKit (`AppDelegate`), removing the need for Storyboard entry points.
+- **Build-Time XIB Validation (`NIBValidatorPlugin`)**: An automated Swift Package Manager build-tool plugin that parses your `.xib` Interface Builder files and Swift/Objective-C source files to detect missing or broken `@IBOutlet` and `@IBAction` connections at compile time.
+- **Project Migration CLI (`nibstarter convert`)**: Automatically strips Storyboard files and references from existing `.xcodeproj` projects, adjusts `Info.plist` settings, and generates clean starter view controllers and `.xib` layouts.
+- **Xcode File Templates (`nibstarter install-templates`)**: Installs native Xcode templates for creating `NibInstantiable` view controllers and associated `.xib` files with connections pre-wired.
 
 ## Requirements
 
-| Platform / Tool | Minimum Version |
-| :--- | :--- |
-| iOS | 15.0+ |
-| macOS | 12.0+ |
-| Swift | 6.0+ |
-| Xcode | 16.0+ |
+- iOS 15.0+ / macOS 12.0+
+- Swift 6.0+
+- Xcode 16.0+
 
-## Installation (Swift Package Manager)
+## Installation
 
-### 1. In `Package.swift`
+### 1. In a Swift Package (`Package.swift`)
 
-Add `NIBStarter` to your package dependencies and attach the runtime library and build tool plugin to your target:
+Add NIBStarter as a dependency in your `Package.swift`:
 
 ```swift
 dependencies: [
     .package(url: "https://github.com/adamsat2/NIBStarter.git", from: "1.0.0")
-],
-targets: [
-    .target(
-        name: "MyApp",
-        dependencies: [
-            .product(name: "NIBStarter", package: "NIBStarter")
-        ],
-        plugins: [
-            .plugin(name: "NIBValidatorPlugin", package: "NIBStarter")
-        ]
-    )
 ]
+```
+
+Add the library to your target:
+
+```swift
+.target(
+    name: "MyApp",
+    dependencies: [
+        .product(name: "NIBStarter", package: "NIBStarter") // Swift + Objective-C
+        // Or for pure Objective-C targets:
+        // .product(name: "NIBStarterObjC", package: "NIBStarter")
+    ]
+)
 ```
 
 ### 2. In an Xcode Project (`.xcodeproj`)
@@ -190,11 +183,35 @@ willConnectToSession:(UISceneSession *)session
 
 #### macOS (`NSViewController`)
 
+When bootstrapping an AppKit application without a Storyboard or main NIB, do not call `NSApplicationMain(argc, argv)`. `NSApplicationMain` looks for a main NIB with `NSApplication` as File's Owner. When no main storyboard or `NSMainNibFile` is set in Info.plist, AppKit searches the bundle and loads the first available `.nib` file (`RootViewController.nib`), assigning `NSApplication` as File's Owner. This causes a runtime failure because `NSApplication` does not have the `view` outlet expected by the view controller. In addition, `AppDelegate` is never instantiated.
+
+Instead, instantiate `AppDelegate`, assign it to `app.delegate`, and call `[app run]` in `main.m`:
+
+```objc
+// main.m
+#import <Cocoa/Cocoa.h>
+#import "AppDelegate.h"
+
+int main(int argc, const char * argv[]) {
+    @autoreleasepool {
+        NSApplication *app = [NSApplication sharedApplication];
+        AppDelegate *delegate = [[AppDelegate alloc] init];
+        app.delegate = delegate;
+        [app run];
+    }
+    return 0;
+}
+```
+
 ```objc
 // AppDelegate.m
 #import "AppDelegate.h"
 #import "MainViewController.h"
 #import <NIBStarterObjC/NIBStarterObjC.h>
+
+@interface AppDelegate ()
+@property (strong, nonatomic) NSWindowController *windowController;
+@end
 
 @implementation AppDelegate
 
@@ -260,18 +277,6 @@ Restart Xcode and open **File > New > File...** to use the four templates under 
 - **NibInstantiable NSViewController (Swift)**
 - **NibInstantiable NSViewController (Objective-C)**
 
-To remove the templates:
-
-```bash
-swift run nibstarter install-templates --uninstall
-```
-
-## Running Tests
-
-```bash
-swift test
-```
-
 ## License
 
-NIBStarter is released under the [MIT License](LICENSE).
+MIT License. See [LICENSE](LICENSE) for details.
