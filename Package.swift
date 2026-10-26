@@ -10,29 +10,29 @@ let package = Package(
         .macOS(.v12)
     ],
     products: [
-        // Products define the executables and libraries a package produces, making them visible to other packages.
-        // component 1: runtime libraries
+        // Runtime Libraries (iOS & macOS)
         .library(
             name: "NIBStarter",
-            targets: ["NIBStarter", "NIBStarterObjC"]
+            targets: ["NIBStarter"]
         ),
         .library(
             name: "NIBStarterObjC",
             targets: ["NIBStarterObjC"]
         ),
-        // component 2: validator CLI & plugin
+        // Build-Time Validator Executable & Plugin
         .executable(
             name: "nib-validator",
             targets: ["NIBValidator"]
         ),
-        .plugin(
-            name: "NIBValidatorPlugin",
-            targets: ["NIBValidatorPlugin"]
-        ),
-        // component 3: scaffolding CLI & command plugin
+        // Developer CLI (Templates + Storyboard Stripper)
         .executable(
             name: "nibstarter",
             targets: ["NIBStarterCLI"]
+        ),
+        // Build Tool & Command Plugins
+        .plugin(
+            name: "NIBValidatorPlugin",
+            targets: ["NIBValidatorPlugin"]
         ),
         .plugin(
             name: "NIBConvertPlugin",
@@ -41,20 +41,15 @@ let package = Package(
         .plugin(
             name: "NIBInstallTemplatesPlugin",
             targets: ["NIBInstallTemplatesPlugin"]
-        ),
+        )
     ],
     dependencies: [
-        // AST parsing for component 2
         .package(url: "https://github.com/swiftlang/swift-syntax.git", from: "600.0.0"),
-        // CLI Command parser for component 3
         .package(url: "https://github.com/apple/swift-argument-parser.git", from: "1.3.0"),
-        // Xcode project manipulation for component 3
-        .package(url: "https://github.com/tuist/XcodeProj.git", from: "8.16.0"),
+        .package(url: "https://github.com/tuist/XcodeProj.git", from: "8.24.0")
     ],
     targets: [
-        // Targets are the basic building blocks of a package, defining a module or a test suite.
-        // Targets can depend on other targets in this package and products from dependencies.
-        // MARK: - component 1: Runtime
+        // MARK: - Component 1: Runtime
         .target(
             name: "NIBStarter",
             dependencies: []
@@ -64,13 +59,13 @@ let package = Package(
             dependencies: [],
             publicHeadersPath: "include"
         ),
-        
-        // MARK: - component 2: Validator
+
+        // MARK: - Component 2: Build-Time Validator
         .target(
             name: "NIBValidatorCore",
             dependencies: [
                 .product(name: "SwiftSyntax", package: "swift-syntax"),
-                .product(name: "SwiftParser", package: "swift-syntax"),
+                .product(name: "SwiftParser", package: "swift-syntax")
             ]
         ),
         .executableTarget(
@@ -85,8 +80,8 @@ let package = Package(
             capability: .buildTool(),
             dependencies: ["NIBValidator"]
         ),
-        
-        // MARK: - component 3: CLI & Command Plugins
+
+        // MARK: - Component 3 & 4: Developer CLI & Command Plugins
         .executableTarget(
             name: "NIBStarterCLI",
             dependencies: [
@@ -99,10 +94,10 @@ let package = Package(
             capability: .command(
                 intent: .custom(
                     verb: "nibstarter-convert",
-                    description: "Convert Storyboards to NIBStarter and set up programmatic bootstrapping"
+                    description: "Convert Storyboards to NIBStarter"
                 ),
                 permissions: [
-                    .writeToPackageDirectory(reason: "Strip Storyboards and scaffold NIB starter files")
+                    .writeToPackageDirectory(reason: "Strips Storyboards, updates project configuration, and generates starter NIB files.")
                 ]
             ),
             dependencies: ["NIBStarterCLI"]
@@ -112,12 +107,15 @@ let package = Package(
             capability: .command(
                 intent: .custom(
                     verb: "nibstarter-install-templates",
-                    description: "Install NIBStarter file templates into Xcode"
-                )
+                    description: "Install NIBStarter Xcode Templates"
+                ),
+                permissions: [
+                    .writeToPackageDirectory(reason: "Installs NIBStarter file templates.")
+                ]
             ),
             dependencies: ["NIBStarterCLI"]
         ),
-        
+
         // MARK: - Tests
         .testTarget(
             name: "NIBStarterTests",
@@ -125,8 +123,9 @@ let package = Package(
                 "NIBStarter",
                 "NIBStarterObjC",
                 "NIBValidatorCore",
-                "NIBStarterCLI"
+                "NIBStarterCLI",
+                .product(name: "XcodeProj", package: "XcodeProj")
             ]
-        ),
+        )
     ]
 )

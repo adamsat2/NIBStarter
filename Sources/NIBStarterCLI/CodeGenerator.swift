@@ -20,26 +20,33 @@ public enum ProjectLanguage: String, ExpressibleByArgument, CaseIterable, Sendab
 
 public struct CodeGenerator {
     
+    @discardableResult
     public static func generateStarterFiles(
         in targetDir: URL,
         appName: String,
         platform: ProjectPlatform,
         language: ProjectLanguage
-    ) throws {
+    ) throws -> [URL] {
         let fileManager = FileManager.default
         try fileManager.createDirectory(at: targetDir, withIntermediateDirectories: true)
         
         switch platform {
         case .ios:
-            try generateIOSFiles(in: targetDir, appName: appName, language: language)
+            return try generateIOSFiles(in: targetDir, appName: appName, language: language)
         case .macos:
-            try generateMacOSFiles(in: targetDir, appName: appName, language: language)
+            return try generateMacOSFiles(in: targetDir, appName: appName, language: language)
         }
+    }
+    
+    private static func writeInPlace(_ content: String, to url: URL) throws {
+        try Data(content.utf8).write(to: url)
     }
     
     // MARK: - iOS Scaffolding
     
-    private static func generateIOSFiles(in targetDir: URL, appName: String, language: ProjectLanguage) throws {
+    private static func generateIOSFiles(in targetDir: URL, appName: String, language: ProjectLanguage) throws -> [URL] {
+        var generatedURLs: [URL] = []
+        
         let xib = """
         <?xml version="1.0" encoding="UTF-8"?>
         <document type="com.apple.InterfaceBuilder3.CocoaTouch.XIB" version="3.0" toolsVersion="22000" targetRuntime="iOS.CocoaTouch" propertyAccessControl="none" useAutolayout="YES" useTraitCollections="YES" useSafeAreas="YES" colorMatched="YES">
@@ -79,7 +86,9 @@ public struct CodeGenerator {
             </objects>
         </document>
         """
-        try xib.write(to: targetDir.appendingPathComponent("RootViewController.xib"), atomically: true, encoding: .utf8)
+        let xibURL = targetDir.appendingPathComponent("RootViewController.xib")
+        try writeInPlace(xib, to: xibURL)
+        generatedURLs.append(xibURL)
         
         switch language {
         case .swift:
@@ -109,8 +118,37 @@ public struct CodeGenerator {
                 }
             }
             """
-            try vc.write(to: targetDir.appendingPathComponent("RootViewController.swift"), atomically: true, encoding: .utf8)
-            try sceneDelegate.write(to: targetDir.appendingPathComponent("SceneDelegate.swift"), atomically: true, encoding: .utf8)
+            let vcURL = targetDir.appendingPathComponent("RootViewController.swift")
+            let sceneURL = targetDir.appendingPathComponent("SceneDelegate.swift")
+            try writeInPlace(vc, to: vcURL)
+            try writeInPlace(sceneDelegate, to: sceneURL)
+            generatedURLs.append(vcURL)
+            generatedURLs.append(sceneURL)
+            
+            let appDelegateURL = targetDir.appendingPathComponent("AppDelegate.swift")
+            if !FileManager.default.fileExists(atPath: appDelegateURL.path) {
+                let mainAttr = "@main"
+                let appDelegate = """
+                import UIKit
+
+                \(mainAttr)
+                class AppDelegate: UIResponder, UIApplicationDelegate {
+                    var window: UIWindow?
+
+                    func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
+                        return true
+                    }
+
+                    func application(_ application: UIApplication, configurationForConnecting connectingSceneSession: UISceneSession, options: UIScene.ConnectionOptions) -> UISceneConfiguration {
+                        let configuration = UISceneConfiguration(name: "Default Configuration", sessionRole: connectingSceneSession.role)
+                        configuration.delegateClass = SceneDelegate.self
+                        return configuration
+                    }
+                }
+                """
+                try writeInPlace(appDelegate, to: appDelegateURL)
+                generatedURLs.append(appDelegateURL)
+            }
             
         case .objc:
             let h = """
@@ -125,7 +163,9 @@ public struct CodeGenerator {
             """
             let m = """
             #import "RootViewController.h"
+            #if __has_include(<NIBStarterObjC/NIBStarterObjC.h>)
             #import <NIBStarterObjC/NIBStarterObjC.h>
+            #endif
 
             @implementation RootViewController
 
@@ -135,32 +175,61 @@ public struct CodeGenerator {
 
             @end
             """
+            let sceneHURL = targetDir.appendingPathComponent("SceneDelegate.h")
+            if !FileManager.default.fileExists(atPath: sceneHURL.path) {
+                let sceneH = """
+                #import <UIKit/UIKit.h>
+
+                @interface SceneDelegate : UIResponder <UIWindowSceneDelegate>
+
+                @property (strong, nonatomic) UIWindow * window;
+
+                @end
+                """
+                try writeInPlace(sceneH, to: sceneHURL)
+                generatedURLs.append(sceneHURL)
+            }
+            
             let sceneM = """
             #import "SceneDelegate.h"
             #import "RootViewController.h"
+            #if __has_include(<NIBStarterObjC/NIBStarterObjC.h>)
             #import <NIBStarterObjC/NIBStarterObjC.h>
+            #endif
 
             @implementation SceneDelegate
 
             - (void)scene:(UIScene *)scene willConnectToSession:(UISceneSession *)session options:(UISceneConnectionOptions *)connectionOptions {
+                if (![scene isKindOfClass:[UIWindowScene class]]) return;
                 UIWindowScene *windowScene = (UIWindowScene *)scene;
-                if (!windowScene) return;
                 self.window = [[UIWindow alloc] initWithWindowScene:windowScene];
+            #if __has_include(<NIBStarterObjC/NIBStarterObjC.h>)
                 self.window.rootViewController = [RootViewController nib_instantiate];
+            #else
+                self.window.rootViewController = [[RootViewController alloc] initWithNibName:@"RootViewController" bundle:[NSBundle bundleForClass:[RootViewController class]]];
+            #endif
                 [self.window makeKeyAndVisible];
             }
 
             @end
             """
-            try h.write(to: targetDir.appendingPathComponent("RootViewController.h"), atomically: true, encoding: .utf8)
-            try m.write(to: targetDir.appendingPathComponent("RootViewController.m"), atomically: true, encoding: .utf8)
-            try sceneM.write(to: targetDir.appendingPathComponent("SceneDelegate.m"), atomically: true, encoding: .utf8)
+            let rootHURL = targetDir.appendingPathComponent("RootViewController.h")
+            let rootMURL = targetDir.appendingPathComponent("RootViewController.m")
+            let sceneMURL = targetDir.appendingPathComponent("SceneDelegate.m")
+            try writeInPlace(h, to: rootHURL)
+            try writeInPlace(m, to: rootMURL)
+            try writeInPlace(sceneM, to: sceneMURL)
+            generatedURLs.append(contentsOf: [rootHURL, rootMURL, sceneMURL])
         }
+        
+        return generatedURLs
     }
     
     // MARK: - macOS Scaffolding
     
-    private static func generateMacOSFiles(in targetDir: URL, appName: String, language: ProjectLanguage) throws {
+    private static func generateMacOSFiles(in targetDir: URL, appName: String, language: ProjectLanguage) throws -> [URL] {
+        var generatedURLs: [URL] = []
+        
         let xib = """
         <?xml version="1.0" encoding="UTF-8"?>
         <document type="com.apple.InterfaceBuilder3.Cocoa.XIB" version="3.0" toolsVersion="22000" targetRuntime="MacOSX.Cocoa" propertyAccessControl="none" useAutolayout="YES" customObjectInstantitationMethod="direct">
@@ -197,7 +266,9 @@ public struct CodeGenerator {
             </objects>
         </document>
         """
-        try xib.write(to: targetDir.appendingPathComponent("RootViewController.xib"), atomically: true, encoding: .utf8)
+        let xibURL = targetDir.appendingPathComponent("RootViewController.xib")
+        try writeInPlace(xib, to: xibURL)
+        generatedURLs.append(xibURL)
         
         switch language {
         case .swift:
@@ -220,6 +291,14 @@ public struct CodeGenerator {
             class AppDelegate: NSObject, NSApplicationDelegate {
                 var windowController: NSWindowController?
 
+                static func main() {
+                    let app = NSApplication.shared
+                    app.setActivationPolicy(.regular)
+                    let delegate = AppDelegate()
+                    app.delegate = delegate
+                    app.run()
+                }
+
                 func applicationDidFinishLaunching(_ aNotification: Notification) {
                     windowController = NibStarter.bootstrapAppKit(
                         root: RootViewController.instantiateFromNib(),
@@ -228,8 +307,11 @@ public struct CodeGenerator {
                 }
             }
             """
-            try vc.write(to: targetDir.appendingPathComponent("RootViewController.swift"), atomically: true, encoding: .utf8)
-            try appDelegate.write(to: targetDir.appendingPathComponent("AppDelegate.swift"), atomically: true, encoding: .utf8)
+            let vcURL = targetDir.appendingPathComponent("RootViewController.swift")
+            let appDelegateURL = targetDir.appendingPathComponent("AppDelegate.swift")
+            try writeInPlace(vc, to: vcURL)
+            try writeInPlace(appDelegate, to: appDelegateURL)
+            generatedURLs.append(contentsOf: [vcURL, appDelegateURL])
             
         case .objc:
             let h = """
@@ -244,7 +326,9 @@ public struct CodeGenerator {
             """
             let m = """
             #import "RootViewController.h"
+            #if __has_include(<NIBStarterObjC/NIBStarterObjC.h>)
             #import <NIBStarterObjC/NIBStarterObjC.h>
+            #endif
 
             @implementation RootViewController
 
@@ -266,13 +350,16 @@ public struct CodeGenerator {
 
                 NS_ASSUME_NONNULL_END
                 """
-                try appDelegateH.write(to: appDelegateHURL, atomically: true, encoding: .utf8)
+                try writeInPlace(appDelegateH, to: appDelegateHURL)
+                generatedURLs.append(appDelegateHURL)
             }
             let appDelegateM = """
             #import <AppKit/AppKit.h>
             #import "AppDelegate.h"
             #import "RootViewController.h"
+            #if __has_include(<NIBStarterObjC/NIBStarterObjC.h>)
             #import <NIBStarterObjC/NIBStarterObjC.h>
+            #endif
 
             @interface AppDelegate ()
             @property (strong, nonatomic) NSWindowController *windowController;
@@ -281,10 +368,16 @@ public struct CodeGenerator {
             @implementation AppDelegate
 
             - (void)applicationDidFinishLaunching:(NSNotification *)aNotification {
+            #if __has_include(<NIBStarterObjC/NIBStarterObjC.h>)
                 RootViewController *root = [RootViewController nib_instantiate];
+            #else
+                RootViewController *root = [[RootViewController alloc] initWithNibName:@"RootViewController" bundle:[NSBundle bundleForClass:[RootViewController class]]];
+            #endif
                 NSWindow *window = [NSWindow windowWithContentViewController:root];
                 window.title = @"\(appName)";
+                [window center];
                 [window makeKeyAndOrderFront:nil];
+                [NSApp activateIgnoringOtherApps:YES];
                 self.windowController = [[NSWindowController alloc] initWithWindow:window];
             }
 
@@ -297,6 +390,7 @@ public struct CodeGenerator {
             int main(int argc, const char * argv[]) {
                 @autoreleasepool {
                     NSApplication *app = [NSApplication sharedApplication];
+                    [app setActivationPolicy:NSApplicationActivationPolicyRegular];
                     AppDelegate *delegate = [[AppDelegate alloc] init];
                     app.delegate = delegate;
                     [app run];
@@ -304,10 +398,17 @@ public struct CodeGenerator {
                 return 0;
             }
             """
-            try h.write(to: targetDir.appendingPathComponent("RootViewController.h"), atomically: true, encoding: .utf8)
-            try m.write(to: targetDir.appendingPathComponent("RootViewController.m"), atomically: true, encoding: .utf8)
-            try appDelegateM.write(to: targetDir.appendingPathComponent("AppDelegate.m"), atomically: true, encoding: .utf8)
-            try mainM.write(to: targetDir.appendingPathComponent("main.m"), atomically: true, encoding: .utf8)
+            let rootHURL = targetDir.appendingPathComponent("RootViewController.h")
+            let rootMURL = targetDir.appendingPathComponent("RootViewController.m")
+            let appDelegateMURL = targetDir.appendingPathComponent("AppDelegate.m")
+            let mainMURL = targetDir.appendingPathComponent("main.m")
+            try writeInPlace(h, to: rootHURL)
+            try writeInPlace(m, to: rootMURL)
+            try writeInPlace(appDelegateM, to: appDelegateMURL)
+            try writeInPlace(mainM, to: mainMURL)
+            generatedURLs.append(contentsOf: [rootHURL, rootMURL, appDelegateMURL, mainMURL])
         }
+        
+        return generatedURLs
     }
 }

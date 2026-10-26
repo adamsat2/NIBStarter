@@ -6,7 +6,9 @@
 //
 
 import XCTest
-import NIBStarterCLI
+@testable import NIBStarterCLI
+import XcodeProj
+import PathKit
 
 final class CodeGeneratorTests: XCTestCase {
     
@@ -63,5 +65,106 @@ final class CodeGeneratorTests: XCTestCase {
         XCTAssertTrue(FileManager.default.fileExists(atPath: rootHURL.path))
         XCTAssertTrue(FileManager.default.fileExists(atPath: rootMURL.path))
         XCTAssertTrue(FileManager.default.fileExists(atPath: rootXibURL.path))
+    }
+    
+    func testMacOSSwiftCodeGeneratorProducesExplicitMainEntryPoint() throws {
+        let appName = "TestMacSwiftApp"
+        try CodeGenerator.generateStarterFiles(
+            in: tempDirectory,
+            appName: appName,
+            platform: .macos,
+            language: .swift
+        )
+        
+        let appDelegateURL = tempDirectory.appendingPathComponent("AppDelegate.swift")
+        let rootVCURL = tempDirectory.appendingPathComponent("RootViewController.swift")
+        let rootXibURL = tempDirectory.appendingPathComponent("RootViewController.xib")
+        
+        XCTAssertTrue(FileManager.default.fileExists(atPath: appDelegateURL.path))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: rootVCURL.path))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: rootXibURL.path))
+        
+        let appDelegateContent = try String(contentsOf: appDelegateURL, encoding: .utf8)
+        XCTAssertTrue(appDelegateContent.contains("static func main()"))
+        XCTAssertTrue(appDelegateContent.contains("let app = NSApplication.shared"))
+        XCTAssertTrue(appDelegateContent.contains("app.delegate = delegate"))
+        XCTAssertTrue(appDelegateContent.contains("app.run()"))
+    }
+    
+    func testIOSObjectiveCCodeGeneratorCreatesSceneDelegateAndRootViewController() throws {
+        let appName = "TestIOSObjCApp"
+        try CodeGenerator.generateStarterFiles(
+            in: tempDirectory,
+            appName: appName,
+            platform: .ios,
+            language: .objc
+        )
+        
+        XCTAssertTrue(FileManager.default.fileExists(atPath: tempDirectory.appendingPathComponent("RootViewController.h").path))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: tempDirectory.appendingPathComponent("RootViewController.m").path))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: tempDirectory.appendingPathComponent("RootViewController.xib").path))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: tempDirectory.appendingPathComponent("SceneDelegate.h").path))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: tempDirectory.appendingPathComponent("SceneDelegate.m").path))
+    }
+    
+    func testLanguageAndPlatformAutoDetection() throws {
+        let projURL = tempDirectory.appendingPathComponent("SampleObjC.xcodeproj")
+        let sourceDir = tempDirectory.appendingPathComponent("SampleObjC")
+        try FileManager.default.createDirectory(at: projURL, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: sourceDir, withIntermediateDirectories: true)
+        
+        let pbxprojContent = """
+        // !$*UTF8*$!
+        {
+            archiveVersion = 1;
+            classes = {
+            };
+            objectVersion = 77;
+            objects = {
+                INFOPLIST_KEY_NSMainStoryboardFile = Main;
+                SDKROOT = macosx;
+            };
+            rootObject = 123456;
+        }
+        """
+        try pbxprojContent.write(to: projURL.appendingPathComponent("project.pbxproj"), atomically: true, encoding: .utf8)
+        try "#import <Cocoa/Cocoa.h>".write(to: sourceDir.appendingPathComponent("AppDelegate.m"), atomically: true, encoding: .utf8)
+        
+        XCTAssertEqual(ConvertCommand.detectPlatform(at: projURL, sourceDir: sourceDir), .macos)
+        XCTAssertEqual(ConvertCommand.detectLanguage(at: projURL, sourceDir: sourceDir), .objc)
+    }
+    
+    func testConvertCommandAcceptsXcodePluginTargetArgument() throws {
+        let cmd = try ConvertCommand.parse([
+            "--project", "/tmp/Test.xcodeproj",
+            "--target", "TestApp",
+            "ExtraPositionalTarget"
+        ])
+        XCTAssertEqual(cmd.project, "/tmp/Test.xcodeproj")
+        XCTAssertEqual(cmd.target, ["TestApp"])
+        XCTAssertEqual(cmd.extraArguments, ["ExtraPositionalTarget"])
+    }
+    
+    func testLocalPackageReferencePreservation() {
+        let original = """
+        /* Begin XCSwiftPackageProductDependency section */
+        \t\tAA11223344556677889900AA /* NIBStarter */ = {
+        \t\t\tisa = XCSwiftPackageProductDependency;
+        \t\t\tpackage = BB11223344556677889900BB /* XCLocalSwiftPackageReference "../NIBStarter" */;
+        \t\t\tproductName = NIBStarter;
+        \t\t};
+        /* End XCSwiftPackageProductDependency section */
+        """
+        let strippedByXcodeProj = """
+        /* Begin XCSwiftPackageProductDependency section */
+        \t\tAA11223344556677889900AA /* NIBStarter */ = {
+        \t\t\tisa = XCSwiftPackageProductDependency;
+        \t\t\tproductName = NIBStarter;
+        \t\t};
+        /* End XCSwiftPackageProductDependency section */
+        """
+        let extracted = StoryboardStripper.extractLocalPackageReferences(from: original)
+        let restored = StoryboardStripper.restoreLocalPackageReferences(in: strippedByXcodeProj, references: extracted)
+        XCTAssertTrue(restored.contains("package = BB11223344556677889900BB /* XCLocalSwiftPackageReference \"../NIBStarter\" */;"))
     }
 }

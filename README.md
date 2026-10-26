@@ -1,166 +1,109 @@
 # NIBStarter
 
-A lightweight SDK for iOS and macOS that eliminates Storyboard overhead in favor of pure XIB (NIB) architectures with type-safe instantiation, build-time interface validation, and project migration tooling.
+A lightweight, type-safe SDK and developer toolchain for building UIKit (iOS) and AppKit (macOS) interfaces using standalone `.xib` files in both Swift and Objective-C, without Storyboards.
 
-## Key Features
+---
 
-- **Type-Safe NIB Instantiation**: Instantiate UIViewController and NSViewController instances from matching .xib files using protocol-oriented Swift extensions and Objective-C categories without hardcoded string identifiers.
-- **Pure Programmatic Bootstrapping**: Window and scene configuration helpers for UIKit (SceneDelegate, AppDelegate) and AppKit (AppDelegate), removing the need for Storyboard entry points.
-- **Build-Time XIB Validation (NIBValidatorPlugin)**: A Swift Package Manager build-tool plugin that parses .xib files and Swift/Objective-C source files to detect missing or broken @IBOutlet and @IBAction connections at compile time.
-- **Project Conversion Tooling**: Convert existing Xcode projects to NIBStarter, stripping Storyboards, updating build settings and Info.plist, and scaffolding programmatic entry points.
-- **Xcode File Templates**: Templates for creating NibInstantiable view controllers and matching .xib files with connections pre-wired.
+## Why NIBStarter?
+
+Storyboards can introduce merge conflicts in team environments, obscure view controller initialization, and encourage stringly-typed segues. Standalone `.xib` files give you visual layout tooling in Interface Builder while keeping navigation and dependency injection in code.
+
+Working with raw `.xib` files in UIKit and AppKit normally involves repetitive boilerplate and runtime traps:
+- Calling `init(nibName: "MyViewController", bundle: nil)` relies on hardcoded strings.
+- Disconnecting the `view` outlet or mistyping the File's Owner class in Interface Builder compiles cleanly and crashes at runtime (`NSInternalInconsistencyException`).
+- New Xcode projects come pre-wired with `Main.storyboard` across `project.pbxproj`, build settings, and `Info.plist`.
+
+**NIBStarter** solves all three problems:
+1. **Zero-String Runtime Library (`NIBStarter` & `NIBStarterObjC`)**: Type-safe XIB instantiation and window bootstrapping for **Swift and Objective-C** on **iOS and macOS**.
+2. **Xcode Project Converter (`NIBConvertPlugin`)**: An Xcode Command Plugin that strips Storyboard references, cleans `Info.plist` and build settings, and scaffolds a working `RootViewController` + `.xib` in Swift or Objective-C.
+3. **Build-Time XIB Contract Validator (`NIBValidatorPlugin`)**: An Xcode Build Tool Plugin that parses your `.xib` XML and source files during compilation, failing the build with inline Xcode diagnostics if a File's Owner class or `view` outlet is misconfigured.
+
+---
 
 ## Requirements
 
-- iOS 15.0+ / macOS 12.0+
-- Swift 6.0+
-- Xcode 16.0+
+- **Xcode**: 16.0+
+- **Platforms**: iOS 15.0+ / macOS 12.0+
+- **Languages**: Swift & Objective-C
 
-## Installation
+---
 
-### In an Xcode Project (.xcodeproj)
+## Installation (Swift Package Manager)
 
-1. In Xcode, select **File > Add Package Dependencies...** and enter `https://github.com/adamsat2/NIBStarter.git`.
-2. Add the **NIBStarter** library (or **NIBStarterObjC** for pure Objective-C apps) to your application target.
-3. (Optional) To enable build-time XIB validation:
-   - Select your project in the Project Navigator, select your app target, and open the **Build Phases** tab.
-   - Expand **Run Build Tool Plug-ins** and click **+** to add **NIBValidatorPlugin**.
-
-### In a Swift Package (Package.swift)
-
-Add NIBStarter to your package dependencies:
-
-```swift
-dependencies: [
-    .package(url: "https://github.com/adamsat2/NIBStarter.git", from: "1.0.0")
-]
-```
-
-Add the product to your target:
-
-```swift
-.target(
-    name: "MyApp",
-    dependencies: [
-        .product(name: "NIBStarter", package: "NIBStarter")
-        // Or for pure Objective-C targets:
-        // .product(name: "NIBStarterObjC", package: "NIBStarter")
-    ]
-)
-```
+1. Open your iOS or macOS project in Xcode.
+2. Go to **File > Add Package Dependencies...**
+3. Enter the repository URL:
+   ```text
+   https://github.com/adamsat2/NIBStarter.git
+   ```
+4. Click **Add Package**.
+5. When prompted to choose package products for your target:
+   - For **Swift** projects, add **`NIBStarter`** to your app target.
+   - For **Objective-C** projects, add **`NIBStarterObjC`** to your app target.
 
 ---
 
 ## Converting an Existing Project to NIBStarter
 
-The conversion tool strips Storyboard references from your project, cleans Storyboard keys from Info.plist and target build settings, deletes physical .storyboard files from disk, and scaffolds a starter RootViewController and .xib with programmatic bootstrapping.
+When you create a new project in Xcode, the default template includes Storyboard boilerplate. Once you have added NIBStarter to your project's Package Dependencies, you can convert the project directly inside Xcode:
 
-### Method 1: Directly in Xcode (No Terminal Needed)
+1. In the **Xcode Project Navigator** (left sidebar), **right-click your top-level project icon**.
+2. Select **Convert Storyboards to NIBStarter** from the context menu.
+3. Select your application target in the dialog and click **Run**.
+4. When prompted by Xcode, click **Allow** to grant the plugin permission to update your project files.
 
-Once you have added the NIBStarter package dependency to your Xcode project:
+### What the Converter Does Automatically
 
-1. In Xcode's Project Navigator (left sidebar), **right-click your project icon** at the top.
-2. Select **NIBConvertPlugin** (or **Convert Storyboards to NIBStarter**).
-3. In the target selection sheet, click **Run**.
-4. When Xcode prompts for permission to modify files, click **Allow**.
+The converter inspects your project to detect the platform (**iOS** or **macOS**) and language (**Swift** or **Objective-C**), then performs the following steps:
+1. **Strips `project.pbxproj`**: Removes `Main.storyboard` and `MainMenu.storyboard` file references, variant groups, `PBXBuildFile` entries, and `INFOPLIST_KEY_UIMainStoryboardFile` / `INFOPLIST_KEY_NSMainStoryboardFile` build settings.
+2. **Cleans `Info.plist`**: Removes `UIMainStoryboardFile`, `NSMainStoryboardFile`, and `UISceneStoryboardFile` keys while preserving your `UISceneDelegateClassName` configuration.
+3. **Deletes Storyboard Files**: Deletes `Main.storyboard` and `MainMenu.storyboard` from disk while leaving `LaunchScreen.storyboard` intact on iOS.
+4. **Scaffolds Starter NIB Files**:
+   - **iOS (Swift)**: Generates `RootViewController.xib`, `RootViewController.swift`, and configures `SceneDelegate.swift`.
+   - **iOS (Objective-C)**: Generates `RootViewController.xib`, `RootViewController.h`, `RootViewController.m`, and configures `SceneDelegate.m`.
+   - **macOS (Swift)**: Generates `RootViewController.xib`, `RootViewController.swift`, and configures `AppDelegate.swift` with an explicit `main()` entry point.
+   - **macOS (Objective-C)**: Generates `RootViewController.xib`, `RootViewController.h`, `RootViewController.m`, `AppDelegate.m`, and configures `main.m` to run `NSApplication` with `AppDelegate` without `NSApplicationMain` storyboard lookup.
 
-### Method 2: Terminal Command (Using Xcode's Downloaded Package Cache)
-
-When you add NIBStarter to an Xcode project via SPM, Xcode downloads the package into your project's `DerivedData/.../SourcePackages/checkouts/NIBStarter` directory. Because a normal `.xcodeproj` does not have a `Package.swift` in its own folder, running `swift run` directly will fail unless you pass `--package-path` pointing to that checkout (or a local clone):
-
-```bash
-# Run from inside your Xcode project directory using Xcode's DerivedData checkout:
-NIB_PATH=$(find ~/Library/Developer/Xcode/DerivedData -type d -path "*/SourcePackages/checkouts/NIBStarter" | head -n 1)
-swift run --package-path "$NIB_PATH" nibstarter convert
-
-# For an Objective-C project:
-swift run --package-path "$NIB_PATH" nibstarter convert --language objc
-
-# Strip storyboards without generating starter files:
-swift run --package-path "$NIB_PATH" nibstarter convert --no-scaffold
-```
-
-Available options:
-- `--project <path>`: Path to the .xcodeproj file (auto-detected if inside the project folder).
-- `--platform <ios|macos>`: Target platform (auto-detected from SDK settings if omitted).
-- `--language <swift|objc>`: Language to scaffold (defaults to swift).
-- `--no-scaffold`: Only strips Storyboards without creating starter files.
-
-### Method 3: Swift Package Manager CLI (For Projects with a Package.swift)
-
-If your app is built as a Swift Package:
-
-```bash
-swift package --allow-writing-to-package-directory nibstarter-convert
-```
+After running the plugin, press **Cmd + R** in Xcode to build and run your app.
 
 ---
 
 ## Installing Xcode File Templates
 
-NIBStarter includes Xcode file templates for quick creation of view controllers with matching .xib files.
+NIBStarter includes a custom Xcode file template (**NibInstantiable View Controller**) that creates a pre-paired View Controller and `.xib` file with the File's Owner and `view` outlet already connected.
 
-### Option 1: Directly in Xcode
-
-1. Right-click your project icon in Xcode's Project Navigator.
-2. Select **NIBInstallTemplatesPlugin** (or **Install NIBStarter File Templates**).
-3. Click **Run** and **Allow**.
-
-### Option 2: Terminal
-
-```bash
-NIB_PATH=$(find ~/Library/Developer/Xcode/DerivedData -type d -path "*/SourcePackages/checkouts/NIBStarter" | head -n 1)
-swift run --package-path "$NIB_PATH" nibstarter install-templates
-```
-
-After installing, restart Xcode. When you open **File > New > File...**, four templates will appear under the **NIBStarter** section:
-- **NibInstantiable UIViewController (Swift)**
-- **NibInstantiable UIViewController (Objective-C)**
-- **NibInstantiable NSViewController (Swift)**
-- **NibInstantiable NSViewController (Objective-C)**
+To install the template from Xcode:
+1. In the **Xcode Project Navigator**, **right-click your top-level project icon**.
+2. Select **Install NIBStarter Xcode Templates** from the context menu and click **Run**.
+3. Restart Xcode and press **Cmd + N** (**File > New > File from Template...**) to find **NibInstantiable View Controller** under the **NIBStarter** section.
 
 ---
 
 ## Runtime Usage
 
-### Swift (iOS / UIKit)
+### 1. Swift (iOS / UIKit)
 
-#### 1. Conform UIViewController to NibInstantiable
-
-Create `ProfileViewController.swift` and a matching `ProfileViewController.xib` (set File's Owner to `ProfileViewController` and wire the `view` outlet):
+Conform your `UIViewController` subclass to `NibInstantiable` and ensure its `.xib` file has the matching name (for example, `ProfileViewController.swift` and `ProfileViewController.xib`):
 
 ```swift
 import UIKit
 import NIBStarter
 
 final class ProfileViewController: UIViewController, NibInstantiable {
-    @IBOutlet private weak var nameLabel: UILabel!
-
     override func viewDidLoad() {
         super.viewDidLoad()
-        nameLabel.text = "Ada Lovelace"
-    }
-
-    @IBAction private func didTapEdit(_ sender: UIButton) {
-        // Handle action
     }
 }
-
-// Instantiate with type safety and no string literals:
-let profileVC = ProfileViewController.instantiateFromNib()
 ```
 
-To specify a custom XIB file name:
+Instantiate and present it anywhere without string literals:
 
 ```swift
-final class CustomViewController: UIViewController, NibInstantiable {
-    static var nibName: String { "CustomLayoutView" }
-}
+let profileVC = ProfileViewController.instantiateFromNib()
+navigationController?.pushViewController(profileVC, animated: true)
 ```
 
-#### 2. Bootstrap in SceneDelegate or AppDelegate
-
-In `SceneDelegate.swift`:
+In `SceneDelegate.swift`, bootstrap the root window using `NibStarter.bootstrap`:
 
 ```swift
 import UIKit
@@ -177,37 +120,39 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         NibStarter.bootstrap(
             scene: scene,
             window: &window,
-            root: ProfileViewController.instantiateFromNib()
+            root: RootViewController.instantiateFromNib()
         )
     }
 }
 ```
 
-For legacy apps without scenes (`AppDelegate.swift`):
+For apps without scenes (`AppDelegate`-only lifecycle), use `NibStarter.bootstrapLegacy`:
 
 ```swift
 NibStarter.bootstrapLegacy(
     window: &window,
-    root: ProfileViewController.instantiateFromNib()
+    root: RootViewController.instantiateFromNib()
 )
 ```
 
-### Swift (macOS / AppKit)
+---
 
-In `MainViewController.swift`:
+### 2. Swift (macOS / AppKit)
+
+Conform your `NSViewController` subclass to `NibInstantiable`:
 
 ```swift
 import AppKit
 import NIBStarter
 
-final class MainViewController: NSViewController, NibInstantiable {
+final class RootViewController: NSViewController, NibInstantiable {
     override func viewDidLoad() {
         super.viewDidLoad()
     }
 }
 ```
 
-In `AppDelegate.swift`:
+In `AppDelegate.swift`, define `static func main()` (so AppKit does not look for a removed `NSMainStoryboardFile`) and call `NibStarter.bootstrapAppKit`:
 
 ```swift
 import AppKit
@@ -217,37 +162,49 @@ import NIBStarter
 class AppDelegate: NSObject, NSApplicationDelegate {
     var windowController: NSWindowController?
 
+    static func main() {
+        let app = NSApplication.shared
+        app.setActivationPolicy(.regular)
+        let delegate = AppDelegate()
+        app.delegate = delegate
+        app.run()
+    }
+
     func applicationDidFinishLaunching(_ notification: Notification) {
         windowController = NibStarter.bootstrapAppKit(
-            root: MainViewController.instantiateFromNib(),
+            root: RootViewController.instantiateFromNib(),
             title: "My Mac App"
         )
     }
 }
 ```
 
-### Objective-C (iOS and macOS)
+---
 
-Import `<NIBStarterObjC/NIBStarterObjC.h>` to use `+nib_instantiate` on any `UIViewController` or `NSViewController` subclass.
+### 3. Objective-C (iOS / UIKit)
 
-#### iOS (UIViewController)
-
-In `ProfileViewController.h`:
+Link `NIBStarterObjC` to your target and import `<NIBStarterObjC/NIBStarterObjC.h>`. Every `UIViewController` subclass gains the `+nib_instantiate` class method:
 
 ```objc
+// RootViewController.h
 #import <UIKit/UIKit.h>
 
-@interface ProfileViewController : UIViewController
-@property (nonatomic, weak) IBOutlet UILabel *nameLabel;
-- (IBAction)didTapSave:(id)sender;
+@interface RootViewController : UIViewController
+@end
+
+// RootViewController.m
+#import "RootViewController.h"
+#import <NIBStarterObjC/NIBStarterObjC.h>
+
+@implementation RootViewController
 @end
 ```
 
-In `SceneDelegate.m`:
+In `SceneDelegate.m`, instantiate your controller with `[RootViewController nib_instantiate]`:
 
 ```objc
 #import "SceneDelegate.h"
-#import "ProfileViewController.h"
+#import "RootViewController.h"
 #import <NIBStarterObjC/NIBStarterObjC.h>
 
 @implementation SceneDelegate
@@ -255,45 +212,28 @@ In `SceneDelegate.m`:
 - (void)scene:(UIScene *)scene
 willConnectToSession:(UISceneSession *)session
       options:(UISceneConnectionOptions *)connectionOptions {
+    if (![scene isKindOfClass:[UIWindowScene class]]) return;
     UIWindowScene *windowScene = (UIWindowScene *)scene;
-    if (!windowScene) return;
 
     self.window = [[UIWindow alloc] initWithWindowScene:windowScene];
-    self.window.rootViewController = [ProfileViewController nib_instantiate];
+    self.window.rootViewController = [RootViewController nib_instantiate];
     [self.window makeKeyAndVisible];
 }
 
 @end
 ```
 
-#### macOS (NSViewController)
+---
 
-When bootstrapping an AppKit application without a Storyboard or main NIB, do not call `NSApplicationMain(argc, argv)`. `NSApplicationMain` looks for a main NIB with `NSApplication` as File's Owner. When no main storyboard or `NSMainNibFile` is set in Info.plist, AppKit loads the first available `.nib` file, assigning `NSApplication` as File's Owner, causing an unrecognized selector crash on the `view` outlet.
+### 4. Objective-C (macOS / AppKit)
 
-Instead, instantiate `AppDelegate`, assign it to `app.delegate`, and call `[app run]` in `main.m`:
-
-In `main.m`:
+Link `NIBStarterObjC` to your target and import `<NIBStarterObjC/NIBStarterObjC.h>`. Every `NSViewController` subclass gains `+nib_instantiate`:
 
 ```objc
-#import <Cocoa/Cocoa.h>
+// AppDelegate.m
+#import <AppKit/AppKit.h>
 #import "AppDelegate.h"
-
-int main(int argc, const char * argv[]) {
-    @autoreleasepool {
-        NSApplication *app = [NSApplication sharedApplication];
-        AppDelegate *delegate = [[AppDelegate alloc] init];
-        app.delegate = delegate;
-        [app run];
-    }
-    return 0;
-}
-```
-
-In `AppDelegate.m`:
-
-```objc
-#import "AppDelegate.h"
-#import "MainViewController.h"
+#import "RootViewController.h"
 #import <NIBStarterObjC/NIBStarterObjC.h>
 
 @interface AppDelegate ()
@@ -302,37 +242,75 @@ In `AppDelegate.m`:
 
 @implementation AppDelegate
 
-- (void)applicationDidFinishLaunching:(NSNotification *)aNotification {
-    MainViewController *root = [MainViewController nib_instantiate];
+- (void)applicationDidFinishLaunching:(NSNotification *)notification {
+    RootViewController *root = [RootViewController nib_instantiate];
     NSWindow *window = [NSWindow windowWithContentViewController:root];
     window.title = @"My Mac App";
+    [window center];
     [window makeKeyAndOrderFront:nil];
+    [NSApp activateIgnoringOtherApps:YES];
     self.windowController = [[NSWindowController alloc] initWithWindow:window];
 }
 
 @end
 ```
 
+In `main.m`, attach `AppDelegate` directly to `NSApplication.sharedApplication` before calling `[app run]`:
+
+```objc
+#import <Cocoa/Cocoa.h>
+#import "AppDelegate.h"
+
+int main(int argc, const char * argv[]) {
+    @autoreleasepool {
+        NSApplication *app = [NSApplication sharedApplication];
+        [app setActivationPolicy:NSApplicationActivationPolicyRegular];
+        AppDelegate *delegate = [[AppDelegate alloc] init];
+        app.delegate = delegate;
+        [app run];
+    }
+    return 0;
+}
+```
+
 ---
 
-## Build-Time XIB Validation
+## Custom NIB Names (Swift)
 
-When you rename or delete an `@IBOutlet` or `@IBAction` in code without removing the connection in Interface Builder, `NIBValidatorPlugin` halts the build and reports the exact file and line number:
+If a view controller's `.xib` file uses a different name than the Swift class, override `nibName`:
 
-```text
-/path/to/LoginViewController.xib:25: error: [NIBStarter] Orphaned outlet 'brokenButton' in 'LoginViewController.xib' has no matching '@IBOutlet' property on class 'LoginViewController'.
-/path/to/LoginViewController.xib:42: error: [NIBStarter] Orphaned action 'didTapOldButton:' in 'LoginViewController.xib' has no matching '@IBAction' method on class 'LoginViewController'.
+```swift
+final class CustomViewController: UIViewController, NibInstantiable {
+    static var nibName: String {
+        return "SharedCustomLayout"
+    }
+}
 ```
 
-You can also run the validator directly in CI pipelines or terminal:
+---
 
-```bash
-NIB_PATH=$(find ~/Library/Developer/Xcode/DerivedData -type d -path "*/SourcePackages/checkouts/NIBStarter" | head -n 1)
-swift run --package-path "$NIB_PATH" nib-validator --path /path/to/YourProject --strict
-```
+## Enabling Build-Time XIB Validation (`NIBValidatorPlugin`)
+
+To catch broken XIB contracts at compile time instead of crashing at launch:
+
+1. Select your project in the **Xcode Project Navigator**.
+2. Select your application target and open the **Build Phases** tab.
+3. Expand **Run Build Tool Plug-ins**.
+4. Click **+** and select **`NIBValidatorPlugin`** from **NIBStarter**.
+5. If Xcode prompts you to trust the plugin on the next build, click **Trust & Enable**.
+
+### What `NIBValidatorPlugin` Verifies
+
+On every build (`Cmd + B`), the validator scans your target's `.xib` files and source files to verify:
+- Every `NibInstantiable` controller has a matching `.xib` file in the target.
+- The `.xib` File's Owner `customClass` matches the view controller class name.
+- The File's Owner `view` outlet is connected in Interface Builder.
+- Every `@IBOutlet` connected in the `.xib` exists on the corresponding view controller class.
+
+If any check fails, Xcode reports a build error directly in the Issue Navigator before the app can launch with a broken nib.
 
 ---
 
 ## License
 
-MIT License. See [LICENSE](LICENSE) for details.
+MIT License.

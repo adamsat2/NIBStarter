@@ -1,41 +1,49 @@
 //
 //  plugin.swift
-//  NIBStarter
+//  NIBInstallTemplatesPlugin
 //
-//  Created by Adam Stern on 26/10/2026.
+//  Created by Adam Stern on 05/04/2026.
 //
 
-import Foundation
 import PackagePlugin
+import Foundation
 
 @main
 struct NIBInstallTemplatesPlugin: CommandPlugin {
     
-    func performCommand(context: PluginContext, arguments: [String]) async throws {
+    func performCommand(context: PluginContext, arguments: [String]) throws {
         var extractor = ArgumentExtractor(arguments)
         _ = extractor.extractOption(named: "target")
-        let remainingArgs = extractor.remainingArguments
+        _ = extractor.extractOption(named: "t")
         
-        let tool = try context.tool(named: "nibstarter")
+        var forwardedArgs = ["install-templates"]
+        if extractor.extractFlag(named: "uninstall") > 0 {
+            forwardedArgs.append("--uninstall")
+        }
+        
+        let tool = try (try? context.tool(named: "nibstarter")) ?? context.tool(named: "NIBStarterCLI")
+        try runTool(tool.url, arguments: forwardedArgs)
+    }
+    
+    private func runTool(_ url: URL, arguments: [String]) throws {
         let process = Process()
-        process.executableURL = tool.url
-        process.arguments = ["install-templates"] + remainingArgs
+        process.executableURL = url
+        process.arguments = arguments
         
-        let outputPipe = Pipe()
-        process.standardOutput = outputPipe
-        process.standardError = outputPipe
+        let pipe = Pipe()
+        process.standardOutput = pipe
+        process.standardError = pipe
         
         try process.run()
         process.waitUntilExit()
         
-        let data = outputPipe.fileHandleForReading.readDataToEndOfFile()
-        let output = String(data: data, encoding: .utf8) ?? ""
-        if !output.isEmpty {
+        let data = pipe.fileHandleForReading.readDataToEndOfFile()
+        if let output = String(data: data, encoding: .utf8), !output.isEmpty {
             print(output)
         }
         
-        guard process.terminationStatus == 0 else {
-            throw NIBInstallTemplatesPluginError.executionFailed(exitCode: process.terminationStatus, output: output)
+        if process.terminationStatus != 0 {
+            Diagnostics.error("nibstarter install-templates failed with exit code \(process.terminationStatus)")
         }
     }
 }
@@ -48,40 +56,15 @@ extension NIBInstallTemplatesPlugin: XcodeCommandPlugin {
     func performCommand(context: XcodePluginContext, arguments: [String]) throws {
         var extractor = ArgumentExtractor(arguments)
         _ = extractor.extractOption(named: "target")
-        let remainingArgs = extractor.remainingArguments
+        _ = extractor.extractOption(named: "t")
         
-        let tool = try context.tool(named: "nibstarter")
-        let process = Process()
-        process.executableURL = tool.url
-        process.arguments = ["install-templates"] + remainingArgs
-        
-        let outputPipe = Pipe()
-        process.standardOutput = outputPipe
-        process.standardError = outputPipe
-        
-        try process.run()
-        process.waitUntilExit()
-        
-        let data = outputPipe.fileHandleForReading.readDataToEndOfFile()
-        let output = String(data: data, encoding: .utf8) ?? ""
-        if !output.isEmpty {
-            print(output)
+        var forwardedArgs = ["install-templates"]
+        if extractor.extractFlag(named: "uninstall") > 0 {
+            forwardedArgs.append("--uninstall")
         }
         
-        guard process.terminationStatus == 0 else {
-            throw NIBInstallTemplatesPluginError.executionFailed(exitCode: process.terminationStatus, output: output)
-        }
+        let tool = try (try? context.tool(named: "nibstarter")) ?? context.tool(named: "NIBStarterCLI")
+        try runTool(tool.url, arguments: forwardedArgs)
     }
 }
 #endif
-
-enum NIBInstallTemplatesPluginError: Error, CustomStringConvertible {
-    case executionFailed(exitCode: Int32, output: String)
-    
-    var description: String {
-        switch self {
-        case .executionFailed(let code, let output):
-            return "NIBStarter template installation failed (exit code \(code)): \(output)"
-        }
-    }
-}

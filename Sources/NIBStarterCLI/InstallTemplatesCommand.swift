@@ -17,13 +17,19 @@ struct InstallTemplatesCommand: ParsableCommand {
     @Flag(name: .long, help: "Uninstall previously installed NIBStarter Xcode templates.")
     var uninstall: Bool = false
     
+    @Option(name: [.long, .customShort("t")], help: .hidden)
+    var target: [String] = []
+    
+    @Argument(help: .hidden)
+    var extraArguments: [String] = []
+    
     func run() throws {
         if uninstall {
             try TemplateInstaller.uninstall()
             print("[NIBStarter] Successfully uninstalled NIBStarter Xcode templates.")
         } else {
             try TemplateInstaller.install()
-            print("[NIBStarter] Template installed successfully!")
+            print("[NIBStarter] Template installed successfully.")
             print("  Location: ~/Library/Developer/Xcode/Templates/File Templates/NIBStarter")
             print("  Restart Xcode to see 'NibInstantiable View Controller' in File -> New File...")
         }

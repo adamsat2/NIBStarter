@@ -1,33 +1,30 @@
 //
 //  plugin.swift
-//  NIBStarter
+//  NIBValidatorPlugin
 //
-//  Created by Adam Stern on 23/10/2026.
+//  Created by Adam Stern on 20/10/2026.
 //
 
-import Foundation
 import PackagePlugin
+import Foundation
 
 @main
 struct NIBValidatorPlugin: BuildToolPlugin {
     
-    /// Entry point for Swift Package targets
     func createBuildCommands(context: PluginContext, target: Target) async throws -> [Command] {
-        // Resolve the compiled CLI tool binary from dependencies
-        let validatorTool = try context.tool(named: "nib-validator")
+        guard let sourceTarget = target as? SourceModuleTarget else {
+            return []
+        }
         
-        // Scan the directory containing the target's source files
-        let targetDirectory = target.directoryURL.path
+        let validatorTool = try (try? context.tool(named: "nib-validator")) ?? context.tool(named: "NIBValidator")
+        let sourceDir = sourceTarget.directoryURL
         
         return [
-            .prebuildCommand(
-                displayName: "Validating NIB connections for \(target.name)",
+            .buildCommand(
+                displayName: "NIBStarter: Validating XIB Contracts for \(target.name)",
                 executable: validatorTool.url,
-                arguments: [
-                    "--path", targetDirectory,
-                    "--strict"
-                ],
-                outputFilesDirectory: context.pluginWorkDirectoryURL
+                arguments: [sourceDir.path],
+                inputFiles: sourceTarget.sourceFiles.map(\.url)
             )
         ]
     }
@@ -38,22 +35,18 @@ import XcodeProjectPlugin
 
 extension NIBValidatorPlugin: XcodeBuildToolPlugin {
     
-    /// Entry point when invoked directly inside an `.xcodeproj` consumer app
     func createBuildCommands(context: XcodePluginContext, target: XcodeTarget) throws -> [Command] {
-        let validatorTool = try context.tool(named: "nib-validator")
+        let validatorTool = try (try? context.tool(named: "nib-validator")) ?? context.tool(named: "NIBValidator")
+        let projectDir = context.xcodeProject.directoryURL
         
-        // In an Xcode project, scan the project root directory
-        let projectDirectory = context.xcodeProject.directoryURL.path
+        let trackedFiles = target.inputFiles.map(\.url)
         
         return [
-            .prebuildCommand(
-                displayName: "Validating NIB connections in \(context.xcodeProject.displayName)",
+            .buildCommand(
+                displayName: "NIBStarter: Validating XIB Contracts for \(target.displayName)",
                 executable: validatorTool.url,
-                arguments: [
-                    "--path", projectDirectory,
-                    "--strict"
-                ],
-                outputFilesDirectory: context.pluginWorkDirectoryURL
+                arguments: [projectDir.path],
+                inputFiles: trackedFiles
             )
         ]
     }

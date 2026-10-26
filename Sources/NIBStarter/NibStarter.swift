@@ -96,6 +96,7 @@ public enum NibStarter {
         window.center()
         window.contentViewController = root
         window.makeKeyAndOrderFront(nil)
+        NSApplication.shared.activate(ignoringOtherApps: true)
         
         let windowController = NSWindowController(window: window)
         return windowController

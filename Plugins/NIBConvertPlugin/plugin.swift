@@ -1,40 +1,55 @@
 //
 //  plugin.swift
-//  NIBStarter
+//  NIBConvertPlugin
 //
-//  Created by Adam Stern on 26/10/2026.
+//  Created by Adam Stern on 05/04/2026.
 //
 
-import Foundation
 import PackagePlugin
+import Foundation
 
 @main
 struct NIBConvertPlugin: CommandPlugin {
     
-    func performCommand(context: PluginContext, arguments: [String]) async throws {
+    func performCommand(context: PluginContext, arguments: [String]) throws {
         var extractor = ArgumentExtractor(arguments)
         _ = extractor.extractOption(named: "target")
-        let remainingArgs = extractor.remainingArguments
+        _ = extractor.extractOption(named: "t")
         
-        let tool = try context.tool(named: "nibstarter")
+        var forwardedArgs: [String] = ["convert"]
+        if let projectPath = extractor.extractOption(named: "project").last ?? extractor.extractOption(named: "p").last {
+            forwardedArgs += ["--project", projectPath]
+        }
+        if let platform = extractor.extractOption(named: "platform").last {
+            forwardedArgs += ["--platform", platform]
+        }
+        if let lang = extractor.extractOption(named: "language").last ?? extractor.extractOption(named: "l").last {
+            forwardedArgs += ["--language", lang]
+        }
+        if extractor.extractFlag(named: "no-scaffold") > 0 {
+            forwardedArgs.append("--no-scaffold")
+        }
+        
+        let tool = try (try? context.tool(named: "nibstarter")) ?? context.tool(named: "NIBStarterCLI")
         let process = Process()
         process.executableURL = tool.url
-        process.arguments = ["convert"] + remainingArgs
+        process.currentDirectoryURL = context.package.directoryURL
+        process.arguments = forwardedArgs
         
-        let outputPipe = Pipe()
-        process.standardOutput = outputPipe
-        process.standardError = outputPipe
+        let pipe = Pipe()
+        process.standardOutput = pipe
+        process.standardError = pipe
         
         try process.run()
         process.waitUntilExit()
         
-        let data = outputPipe.fileHandleForReading.readDataToEndOfFile()
+        let data = pipe.fileHandleForReading.readDataToEndOfFile()
         if let output = String(data: data, encoding: .utf8), !output.isEmpty {
             print(output)
         }
         
-        guard process.terminationStatus == 0 else {
-            throw NIBConvertPluginError.executionFailed(exitCode: process.terminationStatus, output: String(data: data, encoding: .utf8) ?? "")
+        if process.terminationStatus != 0 {
+            Diagnostics.error("nibstarter convert failed with exit code \(process.terminationStatus)")
         }
     }
 }
@@ -47,60 +62,68 @@ extension NIBConvertPlugin: XcodeCommandPlugin {
     func performCommand(context: XcodePluginContext, arguments: [String]) throws {
         var extractor = ArgumentExtractor(arguments)
         _ = extractor.extractOption(named: "target")
-        var remainingArgs = extractor.remainingArguments
+        _ = extractor.extractOption(named: "t")
         
-        // Auto-detect if target contains Objective-C files when --language is not passed
-        if !remainingArgs.contains("--language") && !remainingArgs.contains("-l") {
-            let hasObjC = context.xcodeProject.targets.contains { target in
+        let fileManager = FileManager.default
+        let rawDir = context.xcodeProject.directoryURL
+        let projectDir = rawDir.pathExtension == "xcodeproj" ? rawDir.deletingLastPathComponent() : rawDir
+        
+        let xcodeProjPath: String
+        if rawDir.pathExtension == "xcodeproj" {
+            xcodeProjPath = rawDir.path
+        } else {
+            let contents = (try? fileManager.contentsOfDirectory(at: projectDir, includingPropertiesForKeys: nil)) ?? []
+            xcodeProjPath = contents.first(where: { $0.pathExtension == "xcodeproj" })?.path
+                ?? projectDir.appendingPathComponent("\(context.xcodeProject.displayName).xcodeproj").path
+        }
+        
+        var forwardedArgs: [String] = ["convert", "--project", xcodeProjPath]
+        
+        if let platform = extractor.extractOption(named: "platform").last {
+            forwardedArgs += ["--platform", platform]
+        }
+        
+        if let lang = extractor.extractOption(named: "language").last ?? extractor.extractOption(named: "l").last {
+            forwardedArgs += ["--language", lang]
+        } else {
+            // Also check XcodeTarget inputFiles if available; ConvertCommand will additionally inspect the filesystem and pbxproj
+            let hasObjCInTargets = context.xcodeProject.targets.contains { target in
                 target.inputFiles.contains { file in
                     let ext = file.url.pathExtension.lowercased()
                     return ext == "m" || ext == "mm"
                 }
             }
-            if hasObjC {
-                remainingArgs += ["--language", "objc"]
+            if hasObjCInTargets {
+                forwardedArgs += ["--language", "objc"]
             }
         }
         
-        let tool = try context.tool(named: "nibstarter")
+        if extractor.extractFlag(named: "no-scaffold") > 0 {
+            forwardedArgs.append("--no-scaffold")
+        }
         
-        let fileManager = FileManager.default
-        let projectDir = context.xcodeProject.directoryURL
-        let contents = (try? fileManager.contentsOfDirectory(at: projectDir, includingPropertiesForKeys: nil)) ?? []
-        let xcodeProj = contents.first(where: { $0.pathExtension == "xcodeproj" })?.path
-            ?? projectDir.appendingPathComponent("\(context.xcodeProject.displayName).xcodeproj").path
+        let tool = try (try? context.tool(named: "nibstarter")) ?? context.tool(named: "NIBStarterCLI")
         
         let process = Process()
         process.executableURL = tool.url
-        process.arguments = ["convert", "--project", xcodeProj] + remainingArgs
+        process.currentDirectoryURL = projectDir
+        process.arguments = forwardedArgs
         
-        let outputPipe = Pipe()
-        process.standardOutput = outputPipe
-        process.standardError = outputPipe
+        let pipe = Pipe()
+        process.standardOutput = pipe
+        process.standardError = pipe
         
         try process.run()
         process.waitUntilExit()
         
-        let data = outputPipe.fileHandleForReading.readDataToEndOfFile()
-        let output = String(data: data, encoding: .utf8) ?? ""
-        if !output.isEmpty {
+        let data = pipe.fileHandleForReading.readDataToEndOfFile()
+        if let output = String(data: data, encoding: .utf8), !output.isEmpty {
             print(output)
         }
         
-        guard process.terminationStatus == 0 else {
-            throw NIBConvertPluginError.executionFailed(exitCode: process.terminationStatus, output: output)
+        if process.terminationStatus != 0 {
+            Diagnostics.error("nibstarter convert failed with exit code \(process.terminationStatus)")
         }
     }
 }
 #endif
-
-enum NIBConvertPluginError: Error, CustomStringConvertible {
-    case executionFailed(exitCode: Int32, output: String)
-    
-    var description: String {
-        switch self {
-        case .executionFailed(let code, let output):
-            return "NIBStarter conversion failed (exit code \(code)): \(output)"
-        }
-    }
-}
