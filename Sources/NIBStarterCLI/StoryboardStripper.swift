@@ -142,64 +142,53 @@ public struct StoryboardStripper {
         deleteFilesFromDisk(in: rootDir, names: storyboardNames, extraRelativePaths: targetFilePaths)
     }
     
-    /// Ensures `NIBValidatorPlugin` from `NIBStarter` is registered in the app target's
-    /// `packageProductDependencies` (`Run Build Tool Plug-ins` phase) when `NIBStarter` is linked.
-    public static func ensureValidatorBuildToolPlugin(in projectURL: URL, appName: String) {
+    /// Cleans up any invalid `NIBValidatorPlugin` / `NIBValidateCommandPlugin` / `NIBConvertPlugin` / `NIBInstallTemplatesPlugin`
+    /// entries if a user accidentally added a plugin to `Frameworks, Libraries, and Embedded Content` (`PBXFrameworksBuildPhase`),
+    /// which causes Xcode to emit `Missing package product '..._NIBValidatorPlugin.NIBValidatorPlugin'`.
+    public static func cleanInvalidPluginFrameworkLinks(in projectURL: URL) {
         let pbxprojURL = projectURL.appendingPathComponent("project.pbxproj")
-        guard var text = try? String(contentsOf: pbxprojURL, encoding: .utf8) else { return }
+        guard let text = try? String(contentsOf: pbxprojURL, encoding: .utf8) else { return }
         
-        // If NIBValidatorPlugin is already wired up in XCSwiftPackageProductDependency, nothing to do
-        if text.contains("productName = \"plugin:NIBValidatorPlugin\"") ||
-           text.contains("productName = NIBValidatorPlugin") {
-            return
-        }
+        let pluginNames = [
+            "NIBValidatorPlugin",
+            "NIBValidateCommandPlugin",
+            "NIBConvertPlugin",
+            "NIBInstallTemplatesPlugin"
+        ]
         
-        // Find the existing NIBStarter or NIBStarterObjC package reference line inside XCSwiftPackageProductDependency
-        guard let depStart = text.range(of: "/* Begin XCSwiftPackageProductDependency section */"),
-              let depEnd = text.range(of: "/* End XCSwiftPackageProductDependency section */") else {
-            return
-        }
+        let lines = text.components(separatedBy: "\n")
+        var inInvalidPluginDepBlock = false
+        var filtered: [String] = []
         
-        let depSection = String(text[depStart.upperBound..<depEnd.lowerBound])
-        var nibPackageLine: String?
-        let depBlocks = depSection.components(separatedBy: "};")
-        for block in depBlocks {
-            if block.contains("productName = NIBStarter;") || block.contains("productName = NIBStarterObjC;") {
-                for line in block.components(separatedBy: "\n") {
-                    if line.trimmingCharacters(in: .whitespaces).hasPrefix("package = ") {
-                        nibPackageLine = line
-                        break
-                    }
+        for line in lines {
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            
+            // Detect start of XCSwiftPackageProductDependency block for a plugin without a corresponding PBXBuildPhase
+            if pluginNames.contains(where: { trimmed.contains("/* \($0) */ = {") }) {
+                inInvalidPluginDepBlock = true
+                continue
+            }
+            if inInvalidPluginDepBlock {
+                if trimmed == "};" {
+                    inInvalidPluginDepBlock = false
                 }
+                continue
             }
+            
+            // Remove PBXBuildFile or packageProductDependencies or Frameworks build phase lines referencing plugins in Frameworks
+            if pluginNames.contains(where: { name in
+                trimmed.contains("/* \(name) in Frameworks */") ||
+                trimmed.hasSuffix("/* \(name) */,")
+            }) {
+                continue
+            }
+            
+            filtered.append(line)
         }
         
-        guard let packageLine = nibPackageLine else { return }
-        
-        // Generate a deterministic 24-hex UUID for the plugin dependency
-        let pluginDepUUID = "4E494256414C494441544F52" // "NIBVALIDATOR" in ASCII hex
-        let newDepBlock = """
-        \t\t\(pluginDepUUID) /* NIBValidatorPlugin */ = {
-        \t\t\tisa = XCSwiftPackageProductDependency;
-        \t\t\tisPlugin = 1;
-        \(packageLine)
-        \t\t\tproductName = "plugin:NIBValidatorPlugin";
-        \t\t};
-        """
-        
-        // Insert newDepBlock before /* End XCSwiftPackageProductDependency section */
-        text.replaceSubrange(depEnd.lowerBound..<depEnd.lowerBound, with: newDepBlock + "\n")
-        
-        // Add the pluginDepUUID into the app target's packageProductDependencies = ( ... ); list
-        if let targetStart = text.range(of: "/* Begin PBXNativeTarget section */"),
-           let targetEnd = text.range(of: "/* End PBXNativeTarget section */") {
-            var targetSection = String(text[targetStart.upperBound..<targetEnd.lowerBound])
-            if let pkgDepsRange = targetSection.range(of: "packageProductDependencies = (\n") {
-                let entry = "\t\t\t\t\(pluginDepUUID) /* NIBValidatorPlugin */,\n"
-                targetSection.insert(contentsOf: entry, at: pkgDepsRange.upperBound)
-                text.replaceSubrange(targetStart.upperBound..<targetEnd.lowerBound, with: targetSection)
-                try? Data(text.utf8).write(to: pbxprojURL)
-            }
+        let updated = filtered.joined(separator: "\n")
+        if updated != text {
+            try? Data(updated.utf8).write(to: pbxprojURL)
         }
     }
     
@@ -434,14 +423,43 @@ public struct StoryboardStripper {
             }
         }
         
+        var checkedLprojDirs: Set<URL> = []
         for url in toDelete {
             let parentDir = url.deletingLastPathComponent()
             try? fileManager.removeItem(at: url)
-            // If parent .lproj folder is now empty, remove it as well
-            if parentDir.pathExtension == "lproj",
-               let remaining = try? fileManager.contentsOfDirectory(atPath: parentDir.path),
-               remaining.filter({ !$0.hasPrefix(".") }).isEmpty {
-                try? fileManager.removeItem(at: parentDir)
+            if parentDir.pathExtension == "lproj" {
+                checkedLprojDirs.insert(parentDir)
+            }
+        }
+        
+        // Also scan for any empty .lproj directories (such as Base.lproj after Main.storyboard is deleted)
+        if let dirEnumerator = fileManager.enumerator(
+            at: rootURL,
+            includingPropertiesForKeys: [.isDirectoryKey],
+            options: [.skipsHiddenFiles]
+        ) {
+            for case let url as URL in dirEnumerator {
+                let name = url.lastPathComponent
+                if name.hasSuffix(".xcodeproj") || name.hasSuffix(".xcworkspace") || name == "DerivedData" {
+                    dirEnumerator.skipDescendants()
+                    continue
+                }
+                if url.pathExtension == "lproj" {
+                    checkedLprojDirs.insert(url)
+                }
+            }
+        }
+        
+        for lprojDir in checkedLprojDirs {
+            if let remaining = try? fileManager.contentsOfDirectory(atPath: lprojDir.path) {
+                let visibleFiles = remaining.filter { !$0.hasPrefix(".") }
+                if visibleFiles.isEmpty {
+                    // Remove any hidden files (e.g. .DS_Store) inside the empty .lproj directory first so removeItem succeeds
+                    for hidden in remaining {
+                        try? fileManager.removeItem(at: lprojDir.appendingPathComponent(hidden))
+                    }
+                    try? fileManager.removeItem(at: lprojDir)
+                }
             }
         }
     }

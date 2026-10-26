@@ -196,23 +196,42 @@ final class CodeGeneratorTests: XCTestCase {
         XCTAssertTrue(restored.contains("package = BB11223344556677889900BB /* XCLocalSwiftPackageReference \"../NIBStarter\" */;"))
     }
     
-    func testEnsureValidatorBuildToolPluginWiring() throws {
+    func testCleanInvalidPluginFrameworkLinks() throws {
         let projURL = tempDirectory.appendingPathComponent("TestApp.xcodeproj")
         try FileManager.default.createDirectory(at: projURL, withIntermediateDirectories: true)
         let pbxprojURL = projURL.appendingPathComponent("project.pbxproj")
         
         let samplePbxproj = """
+        /* Begin PBXBuildFile section */
+        \t\tE5DE9543308EE56600724D19 /* NIBStarter in Frameworks */ = {isa = PBXBuildFile; productRef = E5DE9542308EE56600724D19 /* NIBStarter */; };
+        \t\tE5DE954B308EE58500724D19 /* NIBValidatorPlugin in Frameworks */ = {isa = PBXBuildFile; productRef = 4E494256414C494441544F52 /* NIBValidatorPlugin */; };
+        /* End PBXBuildFile section */
+        /* Begin PBXFrameworksBuildPhase section */
+        \t\tE5DE9521308EE50000724D19 /* Frameworks */ = {
+        \t\t\tisa = PBXFrameworksBuildPhase;
+        \t\t\tfiles = (
+        \t\t\t\tE5DE954B308EE58500724D19 /* NIBValidatorPlugin in Frameworks */,
+        \t\t\t\tE5DE9543308EE56600724D19 /* NIBStarter in Frameworks */,
+        \t\t\t);
+        \t\t};
+        /* End PBXFrameworksBuildPhase section */
         /* Begin PBXNativeTarget section */
         \t\t111122223333444455556666 /* TestApp */ = {
         \t\t\tisa = PBXNativeTarget;
         \t\t\tname = TestApp;
         \t\t\tpackageProductDependencies = (
-        \t\t\t\tAA11223344556677889900AA /* NIBStarter */,
+        \t\t\t\t4E494256414C494441544F52 /* NIBValidatorPlugin */,
+        \t\t\t\tE5DE9542308EE56600724D19 /* NIBStarter */,
         \t\t\t);
         \t\t};
         /* End PBXNativeTarget section */
         /* Begin XCSwiftPackageProductDependency section */
-        \t\tAA11223344556677889900AA /* NIBStarter */ = {
+        \t\t4E494256414C494441544F52 /* NIBValidatorPlugin */ = {
+        \t\t\tisa = XCSwiftPackageProductDependency;
+        \t\t\tpackage = BB11223344556677889900BB /* XCRemoteSwiftPackageReference "NIBStarter" */;
+        \t\t\tproductName = "plugin:NIBValidatorPlugin";
+        \t\t};
+        \t\tE5DE9542308EE56600724D19 /* NIBStarter */ = {
         \t\t\tisa = XCSwiftPackageProductDependency;
         \t\t\tpackage = BB11223344556677889900BB /* XCRemoteSwiftPackageReference "NIBStarter" */;
         \t\t\tproductName = NIBStarter;
@@ -221,10 +240,10 @@ final class CodeGeneratorTests: XCTestCase {
         """
         try samplePbxproj.write(to: pbxprojURL, atomically: true, encoding: .utf8)
         
-        StoryboardStripper.ensureValidatorBuildToolPlugin(in: projURL, appName: "TestApp")
+        StoryboardStripper.cleanInvalidPluginFrameworkLinks(in: projURL)
         
         let updated = try String(contentsOf: pbxprojURL, encoding: .utf8)
-        XCTAssertTrue(updated.contains("productName = \"plugin:NIBValidatorPlugin\";"))
-        XCTAssertTrue(updated.contains("4E494256414C494441544F52 /* NIBValidatorPlugin */,"))
+        XCTAssertFalse(updated.contains("NIBValidatorPlugin"))
+        XCTAssertTrue(updated.contains("productName = NIBStarter;"))
     }
 }
