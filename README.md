@@ -15,8 +15,8 @@ Working with raw `.xib` files in UIKit and AppKit normally involves repetitive b
 
 **NIBStarter** solves all three problems:
 1. **Zero-String Runtime Library (`NIBStarter` & `NIBStarterObjC`)**: Type-safe XIB instantiation and window bootstrapping for **Swift and Objective-C** on **iOS and macOS**.
-2. **Xcode Project Converter (`NIBConvertPlugin`)**: An Xcode Command Plugin that strips Storyboard references, cleans `Info.plist` and build settings, and scaffolds a working `RootViewController` + `.xib` in Swift or Objective-C.
-3. **Build-Time XIB Contract Validator (`NIBValidatorPlugin`)**: An Xcode Build Tool Plugin that parses your `.xib` XML and source files during compilation, failing the build with inline Xcode diagnostics if a File's Owner class or `view` outlet is misconfigured.
+2. **Xcode Project Converter (`NIBConvertPlugin`)**: An Xcode Command Plugin that strips Storyboard references, cleans `Info.plist` and build settings, removes the default template `ViewController`, and scaffolds a working `RootViewController` + `.xib` in Swift or Objective-C.
+3. **XIB Contract Validator (`NIBValidatorPlugin` & `NIBValidateCommandPlugin`)**: Validates your `.xib` XML and source files either automatically during compilation (`NIBValidatorPlugin`) or on demand from the Project Navigator context menu (`NIBValidateCommandPlugin`).
 
 ---
 
@@ -43,38 +43,39 @@ Working with raw `.xib` files in UIKit and AppKit normally involves repetitive b
 
 ---
 
-## Converting an Existing Project to NIBStarter
+## Converting an Existing Project (`NIBConvertPlugin`)
 
 When you create a new project in Xcode, the default template includes Storyboard boilerplate. Once you have added NIBStarter to your project's Package Dependencies, you can convert the project directly inside Xcode:
 
 1. In the **Xcode Project Navigator** (left sidebar), **right-click your top-level project icon**.
-2. Select **Convert Storyboards to NIBStarter** from the context menu.
+2. Select **`NIBConvertPlugin`** (or **Convert Storyboards to NIBStarter** depending on your Xcode version) from the context menu.
 3. Select your application target in the dialog and click **Run**.
 4. When prompted by Xcode, click **Allow** to grant the plugin permission to update your project files.
 
-### What the Converter Does Automatically
+### What `NIBConvertPlugin` Does Automatically
 
 The converter inspects your project to detect the platform (**iOS** or **macOS**) and language (**Swift** or **Objective-C**), then performs the following steps:
-1. **Strips `project.pbxproj`**: Removes `Main.storyboard` and `MainMenu.storyboard` file references, variant groups, `PBXBuildFile` entries, and `INFOPLIST_KEY_UIMainStoryboardFile` / `INFOPLIST_KEY_NSMainStoryboardFile` build settings.
+1. **Strips `project.pbxproj`**: Removes `Main.storyboard` and `MainMenu.storyboard` file references, variant groups, `PBXBuildFile` entries, and `INFOPLIST_KEY_UIMainStoryboardFile` / `INFOPLIST_KEY_NSMainStoryboardFile` build settings across all project and target configurations.
 2. **Cleans `Info.plist`**: Removes `UIMainStoryboardFile`, `NSMainStoryboardFile`, and `UISceneStoryboardFile` keys while preserving your `UISceneDelegateClassName` configuration.
-3. **Deletes Storyboard Files**: Deletes `Main.storyboard` and `MainMenu.storyboard` from disk while leaving `LaunchScreen.storyboard` intact on iOS.
+3. **Deletes Storyboard and Template Files**: Deletes `Main.storyboard`, `MainMenu.storyboard`, `Base.lproj/Main.storyboard`, and the default untouched template `ViewController` files from disk while leaving `LaunchScreen.storyboard` intact on iOS.
 4. **Scaffolds Starter NIB Files**:
    - **iOS (Swift)**: Generates `RootViewController.xib`, `RootViewController.swift`, and configures `SceneDelegate.swift`.
    - **iOS (Objective-C)**: Generates `RootViewController.xib`, `RootViewController.h`, `RootViewController.m`, and configures `SceneDelegate.m`.
    - **macOS (Swift)**: Generates `RootViewController.xib`, `RootViewController.swift`, and configures `AppDelegate.swift` with an explicit `main()` entry point.
    - **macOS (Objective-C)**: Generates `RootViewController.xib`, `RootViewController.h`, `RootViewController.m`, `AppDelegate.m`, and configures `main.m` to run `NSApplication` with `AppDelegate` without `NSApplicationMain` storyboard lookup.
+5. **Registers Build-Time Validation**: Automatically attaches `NIBValidatorPlugin` to your application target's **Run Build Tool Plug-ins** phase.
 
 After running the plugin, press **Cmd + R** in Xcode to build and run your app.
 
 ---
 
-## Installing Xcode File Templates
+## Installing Xcode File Templates (`NIBInstallTemplatesPlugin`)
 
 NIBStarter includes a custom Xcode file template (**NibInstantiable View Controller**) that creates a pre-paired View Controller and `.xib` file with the File's Owner and `view` outlet already connected.
 
 To install the template from Xcode:
 1. In the **Xcode Project Navigator**, **right-click your top-level project icon**.
-2. Select **Install NIBStarter Xcode Templates** from the context menu and click **Run**.
+2. Select **`NIBInstallTemplatesPlugin`** (or **Install NIBStarter Xcode Templates**) from the context menu and click **Run**.
 3. Restart Xcode and press **Cmd + N** (**File > New > File from Template...**) to find **NibInstantiable View Controller** under the **NIBStarter** section.
 
 ---
@@ -289,9 +290,19 @@ final class CustomViewController: UIViewController, NibInstantiable {
 
 ---
 
-## Enabling Build-Time XIB Validation (`NIBValidatorPlugin`)
+## XIB Contract Validation (`NIBValidateCommandPlugin` & `NIBValidatorPlugin`)
 
-To catch broken XIB contracts at compile time instead of crashing at launch:
+NIBStarter provides two ways to validate your `.xib` connections against your Swift and Objective-C view controller classes:
+
+### Option 1: Right-Click On-Demand Validation (`NIBValidateCommandPlugin`)
+
+1. In the **Xcode Project Navigator**, **right-click your top-level project icon**.
+2. Select **`NIBValidateCommandPlugin`** (or **Validate XIB Contracts with NIBStarter**) from the context menu.
+3. Click **Run** to validate all `.xib` files in your project immediately.
+
+### Option 2: Automatic Build-Time Validation (`NIBValidatorPlugin`)
+
+Running `NIBConvertPlugin` automatically adds `NIBValidatorPlugin` to your target's **Run Build Tool Plug-ins** phase. You can also add it manually:
 
 1. Select your project in the **Xcode Project Navigator**.
 2. Select your application target and open the **Build Phases** tab.
@@ -299,13 +310,13 @@ To catch broken XIB contracts at compile time instead of crashing at launch:
 4. Click **+** and select **`NIBValidatorPlugin`** from **NIBStarter**.
 5. If Xcode prompts you to trust the plugin on the next build, click **Trust & Enable**.
 
-### What `NIBValidatorPlugin` Verifies
+### What the Validator Verifies
 
-On every build (`Cmd + B`), the validator scans your target's `.xib` files and source files to verify:
+The validator scans your target's `.xib` files and source files (`.swift`, `.h`, `.m`) to verify:
 - Every `NibInstantiable` controller has a matching `.xib` file in the target.
 - The `.xib` File's Owner `customClass` matches the view controller class name.
 - The File's Owner `view` outlet is connected in Interface Builder.
-- Every `@IBOutlet` connected in the `.xib` exists on the corresponding view controller class.
+- Every `@IBOutlet` and `@IBAction` connected in the `.xib` exists on the corresponding view controller class.
 
 If any check fails, Xcode reports a build error directly in the Issue Navigator before the app can launch with a broken nib.
 

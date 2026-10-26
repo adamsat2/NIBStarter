@@ -12,7 +12,7 @@ struct NIBStarterCLI: ParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "nibstarter",
         abstract: "A CLI tool to automate Storyboard stripping, programmatic setup, and Xcode template installation.",
-        version: "1.0.0",
+        version: "1.0.7",
         subcommands: [
             ConvertCommand.self,
             InstallTemplatesCommand.self

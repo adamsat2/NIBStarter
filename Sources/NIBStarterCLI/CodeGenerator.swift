@@ -30,11 +30,42 @@ public struct CodeGenerator {
         let fileManager = FileManager.default
         try fileManager.createDirectory(at: targetDir, withIntermediateDirectories: true)
         
+        removeDefaultViewControllerIfUntouched(in: targetDir)
+        
         switch platform {
         case .ios:
             return try generateIOSFiles(in: targetDir, appName: appName, language: language)
         case .macos:
             return try generateMacOSFiles(in: targetDir, appName: appName, language: language)
+        }
+    }
+    
+    /// Removes Xcode's default template `ViewController.swift`, `ViewController.h`, and `ViewController.m`
+    /// if they still contain only the stock template boilerplate.
+    public static func removeDefaultViewControllerIfUntouched(in targetDir: URL) {
+        let fileManager = FileManager.default
+        let vcSwift = targetDir.appendingPathComponent("ViewController.swift")
+        if let content = try? String(contentsOf: vcSwift, encoding: .utf8) {
+            let nonCommentLines = content
+                .components(separatedBy: .newlines)
+                .map { $0.trimmingCharacters(in: .whitespaces) }
+                .filter { !$0.isEmpty && !$0.hasPrefix("//") }
+            if nonCommentLines.count <= 20 && content.contains("class ViewController") && !content.contains("NibInstantiable") {
+                try? fileManager.removeItem(at: vcSwift)
+            }
+        }
+        
+        let vcM = targetDir.appendingPathComponent("ViewController.m")
+        let vcH = targetDir.appendingPathComponent("ViewController.h")
+        if let mContent = try? String(contentsOf: vcM, encoding: .utf8) {
+            let nonCommentLines = mContent
+                .components(separatedBy: .newlines)
+                .map { $0.trimmingCharacters(in: .whitespaces) }
+                .filter { !$0.isEmpty && !$0.hasPrefix("//") }
+            if nonCommentLines.count <= 25 && mContent.contains("@implementation ViewController") {
+                try? fileManager.removeItem(at: vcM)
+                try? fileManager.removeItem(at: vcH)
+            }
         }
     }
     

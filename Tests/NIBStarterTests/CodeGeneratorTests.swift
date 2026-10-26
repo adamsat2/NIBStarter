@@ -107,6 +107,34 @@ final class CodeGeneratorTests: XCTestCase {
         XCTAssertTrue(FileManager.default.fileExists(atPath: tempDirectory.appendingPathComponent("SceneDelegate.m").path))
     }
     
+    func testDefaultViewControllerRemovedDuringScaffolding() throws {
+        let defaultVC = """
+        //
+        //  ViewController.swift
+        //  MyApp
+        //
+        import UIKit
+
+        class ViewController: UIViewController {
+            override func viewDidLoad() {
+                super.viewDidLoad()
+            }
+        }
+        """
+        let vcURL = tempDirectory.appendingPathComponent("ViewController.swift")
+        try defaultVC.write(to: vcURL, atomically: true, encoding: .utf8)
+        
+        try CodeGenerator.generateStarterFiles(
+            in: tempDirectory,
+            appName: "MyApp",
+            platform: .ios,
+            language: .swift
+        )
+        
+        XCTAssertFalse(FileManager.default.fileExists(atPath: vcURL.path), "Default template ViewController.swift should be removed")
+        XCTAssertTrue(FileManager.default.fileExists(atPath: tempDirectory.appendingPathComponent("RootViewController.swift").path))
+    }
+    
     func testLanguageAndPlatformAutoDetection() throws {
         let projURL = tempDirectory.appendingPathComponent("SampleObjC.xcodeproj")
         let sourceDir = tempDirectory.appendingPathComponent("SampleObjC")
@@ -166,5 +194,37 @@ final class CodeGeneratorTests: XCTestCase {
         let extracted = StoryboardStripper.extractLocalPackageReferences(from: original)
         let restored = StoryboardStripper.restoreLocalPackageReferences(in: strippedByXcodeProj, references: extracted)
         XCTAssertTrue(restored.contains("package = BB11223344556677889900BB /* XCLocalSwiftPackageReference \"../NIBStarter\" */;"))
+    }
+    
+    func testEnsureValidatorBuildToolPluginWiring() throws {
+        let projURL = tempDirectory.appendingPathComponent("TestApp.xcodeproj")
+        try FileManager.default.createDirectory(at: projURL, withIntermediateDirectories: true)
+        let pbxprojURL = projURL.appendingPathComponent("project.pbxproj")
+        
+        let samplePbxproj = """
+        /* Begin PBXNativeTarget section */
+        \t\t111122223333444455556666 /* TestApp */ = {
+        \t\t\tisa = PBXNativeTarget;
+        \t\t\tname = TestApp;
+        \t\t\tpackageProductDependencies = (
+        \t\t\t\tAA11223344556677889900AA /* NIBStarter */,
+        \t\t\t);
+        \t\t};
+        /* End PBXNativeTarget section */
+        /* Begin XCSwiftPackageProductDependency section */
+        \t\tAA11223344556677889900AA /* NIBStarter */ = {
+        \t\t\tisa = XCSwiftPackageProductDependency;
+        \t\t\tpackage = BB11223344556677889900BB /* XCRemoteSwiftPackageReference "NIBStarter" */;
+        \t\t\tproductName = NIBStarter;
+        \t\t};
+        /* End XCSwiftPackageProductDependency section */
+        """
+        try samplePbxproj.write(to: pbxprojURL, atomically: true, encoding: .utf8)
+        
+        StoryboardStripper.ensureValidatorBuildToolPlugin(in: projURL, appName: "TestApp")
+        
+        let updated = try String(contentsOf: pbxprojURL, encoding: .utf8)
+        XCTAssertTrue(updated.contains("productName = \"plugin:NIBValidatorPlugin\";"))
+        XCTAssertTrue(updated.contains("4E494256414C494441544F52 /* NIBValidatorPlugin */,"))
     }
 }

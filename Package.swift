@@ -19,7 +19,7 @@ let package = Package(
             name: "NIBStarterObjC",
             targets: ["NIBStarterObjC"]
         ),
-        // Build-Time Validator Executable & Plugin
+        // Build-Time Validator Executable & Plugins
         .executable(
             name: "nib-validator",
             targets: ["NIBValidator"]
@@ -33,6 +33,10 @@ let package = Package(
         .plugin(
             name: "NIBValidatorPlugin",
             targets: ["NIBValidatorPlugin"]
+        ),
+        .plugin(
+            name: "NIBValidateCommandPlugin",
+            targets: ["NIBValidateCommandPlugin"]
         ),
         .plugin(
             name: "NIBConvertPlugin",
@@ -60,7 +64,7 @@ let package = Package(
             publicHeadersPath: "include"
         ),
 
-        // MARK: - Component 2: Build-Time Validator
+        // MARK: - Component 2: Build-Time & Command Validator
         .target(
             name: "NIBValidatorCore",
             dependencies: [
@@ -78,6 +82,17 @@ let package = Package(
         .plugin(
             name: "NIBValidatorPlugin",
             capability: .buildTool(),
+            dependencies: ["NIBValidator"]
+        ),
+        .plugin(
+            name: "NIBValidateCommandPlugin",
+            capability: .command(
+                intent: .custom(
+                    verb: "nibstarter-validate",
+                    description: "Validate XIB Contracts with NIBStarter"
+                ),
+                permissions: []
+            ),
             dependencies: ["NIBValidator"]
         ),
 

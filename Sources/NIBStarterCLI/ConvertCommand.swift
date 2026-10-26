@@ -88,6 +88,9 @@ public struct ConvertCommand: ParsableCommand {
             print("  - Configured bootstrapping entry point")
         }
         
+        // Also ensure NIBValidatorPlugin is registered in the target's Run Build Tool Plug-ins phase
+        StoryboardStripper.ensureValidatorBuildToolPlugin(in: projectURL, appName: appName)
+        
         print("\n[NIBStarter] Conversion complete. Build and run your project in Xcode (Cmd + R).")
     }
     
